@@ -1,0 +1,32 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+*.pyo
+.Python
+
+# Virtual environments
+.venv
+
+# Secrets
+.env
+.claude.json
+
+# Data
+data/raw/
+data/cleaned/
+
+# Jupyter 
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
