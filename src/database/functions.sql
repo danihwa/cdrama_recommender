@@ -1,7 +1,7 @@
 -- Provides semantic similarity search with optional filters
 
 create or replace function match_documents (
-  query_embedding vector(1536),
+  query_embedding vector(3072),
   match_threshold float,
   match_count int,
   filter_year int default null,
