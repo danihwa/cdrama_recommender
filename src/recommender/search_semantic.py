@@ -72,7 +72,7 @@ if __name__ == "__main__":
     filters = QueryFilters(
         search_mode="semantic",
         description="heroine loses her memory and falls for her former enemy",
-        min_score=7.5,
+        min_score=8.0,
     )
     rows = retrieve_semantic_candidates(
         filters,
@@ -82,4 +82,7 @@ if __name__ == "__main__":
     )
     print(f"Got {len(rows)} rows:")
     for r in rows:
-        print(f"  [{r['year']}] {r['title']} — {r['mdl_score']}")
+        print(
+            f"  [{r['year']}] {r['title']} "
+            f"— score {r['mdl_score']}, similarity {r['similarity']:.3f}"
+        )
