@@ -11,7 +11,6 @@ create or replace function match_documents (
 )
 returns table (
   id int,
-  mdl_id int,
   title text,
   native_title text,
   year int,
@@ -29,7 +28,6 @@ as $$
   select * from (
     select
       id,
-      mdl_id,
       title,
       native_title,
       year,
