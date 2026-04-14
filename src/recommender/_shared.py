@@ -76,9 +76,6 @@ def vector_search(
     exclusion filters in the same query, which is much more efficient
     than fetching a large number of results and filtering in Python.
 
-    The ``match_threshold`` of 0.3 is a hard floor — below that, results are
-    effectively noise for our embedding model.
-
     Unset filters are passed as ``None`` — the RPC's ``IS NULL`` check
     short-circuits each ``WHERE`` clause, so the filter is effectively
     disabled. ``QueryFilters`` already leaves ``min_year`` / ``min_score``
