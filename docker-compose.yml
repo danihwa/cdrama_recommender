@@ -1,0 +1,19 @@
+services:
+  app:
+    container_name: claude-container
+    hostname: claude-stable-host
+    build: .
+    volumes:
+      - claude-config:/root/.claude
+      - ./.claude.json:/root/.claude.json
+      - .:/workspace
+      - venv:/workspace/.venv
+    env_file:
+      - C:/Users/danic/secrets/.env
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+
+volumes:
+  claude-config:
+  venv:
