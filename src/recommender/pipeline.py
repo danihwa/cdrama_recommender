@@ -120,14 +120,20 @@ def retrieve_candidates(
     raise ValueError(f"Unknown search_mode: {filters.search_mode}")
 
 
-def rerank_candidates(candidates: list[dict]) -> list[dict]:
+def rerank_candidates(
+    candidates: list[dict],
+    *,
+    w_sim: float = 0.70,
+    w_quality: float = 0.20,
+    w_popularity: float = 0.10,
+) -> list[dict]:
     """
     Ensemble reranker combining three signals:
 
-      similarity  (0.70) — cosine similarity from match_documents, [0, 1].
-      quality     (0.20) — MDL score / 10, range [0, 1].
-      popularity  (0.10) — log-scaled watchers, normalised to the
-                           candidate-set max (not globally).
+      similarity  (w_sim)       — cosine similarity from match_documents, [0, 1].
+      quality     (w_quality)   — MDL score / 10, range [0, 1].
+      popularity  (w_popularity) — log-scaled watchers, normalised to the
+                                   candidate-set max (not globally).
 
     The weights are nominal, not effective. In a top-10 set the similarity
     values are usually clustered in a narrow band (~0.1 spread), so in
@@ -158,7 +164,7 @@ def rerank_candidates(candidates: list[dict]) -> list[dict]:
         quality = (drama.get("mdl_score") or 0.0) / 10.0
         watchers = drama.get("watchers") or 1
         popularity = math.log(max(watchers, 1)) / log_max_watchers
-        drama["ensemble_score"] = 0.70 * similarity + 0.20 * quality + 0.10 * popularity
+        drama["ensemble_score"] = w_sim * similarity + w_quality * quality + w_popularity * popularity
     return sorted(candidates, key=lambda d: d["ensemble_score"], reverse=True)
 
 
