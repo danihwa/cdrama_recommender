@@ -22,3 +22,8 @@ dependencies = [
     "requests>=2.33.1",
     "supabase>=2.28.3",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that make real API calls (deselect with -m 'not integration')",
+]
