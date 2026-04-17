@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # uv (manages Python + dependencies)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:/root/.cargo/bin:${PATH}"
+ENV PATH="/root/.claude/bin:/root/.local/bin:/root/.cargo/bin:${PATH}"
 
 # Python 3.12 via uv
 RUN uv python install 3.12 && \
