@@ -7,7 +7,9 @@ without needing an import.  pytest discovers it by name convention.
 
 import pytest
 from openai import OpenAI
+from supabase import Client
 
+from src.database.connection import get_db_connection
 from src.env import load_secrets
 
 
@@ -28,3 +30,15 @@ def openai_client():
     """
     load_secrets()
     return OpenAI()
+
+
+@pytest.fixture(scope="module")
+def supabase() -> Client:
+    """Authenticated Supabase client for DB-hitting integration tests.
+
+    Same module scope as openai_client — one connection per test file
+    is enough. load_secrets() is idempotent, so calling it here alongside
+    the openai_client fixture is safe.
+    """
+    load_secrets()
+    return get_db_connection()

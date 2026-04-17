@@ -94,6 +94,11 @@ def vector_search(
             "filter_genres": (
                 normalize_genres(filters.genres) if filters.genres else None
             ),
+            "exclude_genres": (
+                normalize_genres(filters.exclude_genres)
+                if filters.exclude_genres
+                else None
+            ),
         },
     ).execute()
     return result.data

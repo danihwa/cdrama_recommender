@@ -25,5 +25,6 @@ dependencies = [
 
 [tool.pytest.ini_options]
 markers = [
-    "integration: tests that make real API calls (deselect with -m 'not integration')",
+    "db: tests that hit the real Supabase DB (deselect with -m 'not db')",
+    "parser: tests that call the OpenAI API via parse_user_query (deselect with -m 'not parser')",
 ]

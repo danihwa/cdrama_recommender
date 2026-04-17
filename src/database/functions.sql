@@ -7,7 +7,8 @@ create or replace function match_documents (
   filter_year int default null,
   filter_score float default null,
   exclude_ids int[] default null,
-  filter_genres text[] default null
+  filter_genres text[] default null,
+  exclude_genres text[] default null
 )
 returns table (
   id int,
@@ -43,6 +44,7 @@ as $$
       and (filter_year is null or cdramas.year >= filter_year)
       and (filter_score is null or cdramas.mdl_score >= filter_score)
       and (filter_genres is null or cdramas.genres && filter_genres)
+      and (exclude_genres is null or not (cdramas.genres && exclude_genres))
   ) sub
   where similarity > match_threshold
   order by similarity desc

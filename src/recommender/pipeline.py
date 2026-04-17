@@ -50,7 +50,8 @@ First decide search_mode — one of:
 Field rules:
 - reference_title: only set in reference mode. NEVER put a drama title in genres.
 - description: only set in semantic mode. Capture the plot/character cues (no filters like year or rating).
-- genres: explicit genre names as a list (e.g. ['romance', 'historical', 'mystery']).
+- genres: explicit genre names to INCLUDE (e.g. ['romance', 'historical', 'mystery']).
+- exclude_genres: genre names the user wants AVOIDED ("no romance", "not wuxia", "avoid fantasy"). Put them here, NEVER in genres. A genre must never appear in both lists.
 - exclude_titles: dramas the user says they already watched, just finished, or explicitly wants excluded. Can be multiple titles.
 - min_year rules: 'no older than 2020' = 2020, 'after 2018' = 2019, 'from 2020 onwards' = 2020.
 - min_score rules: 'rating above 8' = 8.0, 'highly rated' = 8.5, 'good rating' = 8.0, 'rating at least 8.5' = 8.5.\

@@ -56,6 +56,10 @@ def retrieve_sql_candidates(
     # contains would require the drama to have ALL the listed genres.
     if filters.genres:
         query = query.overlaps("genres", normalize_genres(filters.genres))
+    if filters.exclude_genres:
+        query = query.not_.overlaps(
+            "genres", normalize_genres(filters.exclude_genres)
+        )
     if exclude_ids:
         query = query.not_.in_("id", exclude_ids)
 

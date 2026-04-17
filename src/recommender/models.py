@@ -50,3 +50,8 @@ class QueryFilters(BaseModel):
     # Dramas the user says they already watched — excluded from results.
     # In reference mode, the reference drama is always excluded too.
     exclude_titles: list[str] = []
+
+    # Genres the user explicitly wants avoided ("no romance", "not wuxia",
+    # "avoid fantasy"). Applied as a NOT-overlap SQL filter alongside the
+    # include list in `genres`.
+    exclude_genres: list[str] = []
