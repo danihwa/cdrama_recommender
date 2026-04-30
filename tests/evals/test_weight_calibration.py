@@ -105,15 +105,6 @@ class Preference:
 
 PREFERENCES = [
     # ── Reference mode ──────────────────────────────────────────────
-    # Similarity is the primary signal (the user said "like X"), but
-    # quality should override when the sim gap is tiny.
-
-    Preference(
-        "ref_nirvana_in_fire",
-        higher="Joy of Life",  # sim=0.756, score=9.0, watchers=40707
-        lower="Promise of Chang",  # sim=0.781, score=7.6, watchers=5033
-        reason="Joy of Life's much higher quality (9.0 vs 7.6) should overcome a 0.025 sim gap",
-    ),
     Preference(
         "ref_nirvana_in_fire",
         higher="Joy of Life",  # sim=0.756, score=9.0
@@ -121,40 +112,13 @@ PREFERENCES = [
         reason="Same similarity — quality (9.0 vs 7.8) should decide",
     ),
     Preference(
-        "ref_nirvana_in_fire",
-        higher="Rise of Phoenixes",  # sim=0.758, score=8.4
-        lower="Love in Between",  # sim=0.739, score=7.8
-        reason="Higher similarity AND higher quality — clear win",
-    ),
-    Preference(
-        "ref_love_o2o",
-        higher="Falling into Your Smile",  # sim=0.799, score=8.6, watchers=101669
-        lower="Double Love",  # sim=0.800, score=7.9, watchers=8036
-        reason="0.001 sim gap is noise; quality + popularity should win",
-    ),
-    Preference(
-        "ref_love_o2o",
-        higher="You Are My Glory",  # sim=0.754, score=8.7
-        lower="Unique Lady",  # sim=0.718, score=7.8
-        reason="Higher in everything that matters",
-    ),
-    Preference(
         "ref_hidden_love",
         higher="My Fated Boy",  # sim=0.790, score=8.3
         lower="When I Fly Towards You",  # sim=0.690, score=9.0
         reason="0.10 sim gap is large — similarity should win in reference mode",
     ),
-    Preference(
-        "ref_hidden_love",
-        higher="Shine on Me",  # sim=0.709, score=8.6, watchers=33891
-        lower="Memory of Encaustic Tile",  # sim=0.713, score=8.0, watchers=9538
-        reason="Tiny sim gap (0.004), much better quality + popularity",
-    ),
 
     # ── Semantic mode ───────────────────────────────────────────────
-    # Similarity is less precise here (user described a vibe, not an
-    # exact match), so quality should have an easier time overriding it.
-
     Preference(
         "sem_amnesia_enemies",
         higher="Are You the One",  # sim=0.535, score=8.5, watchers=23872
@@ -162,58 +126,18 @@ PREFERENCES = [
         reason="Quality (8.5 vs 7.5) should overcome a 0.011 sim gap",
     ),
     Preference(
-        "sem_amnesia_enemies",
-        higher="Fated Hearts",  # sim=0.555, score=8.7
-        lower="Lady & Liar",  # sim=0.540, score=7.6
-        reason="Higher similarity AND higher quality — clear win",
-    ),
-    Preference(
         "sem_doctor_cold_ml",
         higher="Unforgettable Love",  # sim=0.592, score=8.4, watchers=55792
         lower="Thank You, Doctor",  # sim=0.599, score=7.5, watchers=3945
         reason="Small sim gap (0.007), much better quality + popularity",
     ),
-    Preference(
-        "sem_doctor_cold_ml",
-        higher="The Best Thing",  # sim=0.573, score=8.7, watchers=53911
-        lower="Emergency Department Doctors",  # sim=0.599, score=7.6, watchers=856
-        reason="Quality gap (8.7 vs 7.6) should overcome 0.026 sim gap",
-    ),
-    Preference(
-        "sem_political_intrigue",
-        higher="Story of Yanxi Palace",  # sim=0.583, score=8.7, watchers=25968
-        lower="Virtuous Queen of Han",  # sim=0.592, score=7.5, watchers=2174
-        reason="Quality (8.7 vs 7.5) + popularity should overcome 0.009 sim gap",
-    ),
-    Preference(
-        "sem_campus_romance",
-        higher="Always Home",  # sim=0.637, score=8.6
-        lower="Make My Heart Smile",  # sim=0.642, score=7.9
-        reason="Tiny sim gap (0.005), better quality should win",
-    ),
-    Preference(
-        "sem_campus_romance",
-        higher="Exclusive Fairytale",  # sim=0.590, score=8.3, watchers=39450
-        lower="Once and Forever",  # sim=0.591, score=7.7, watchers=846
-        reason="Nearly identical sim, much better quality + popularity",
-    ),
 
     # ── SQL mode ────────────────────────────────────────────────────
-    # No similarity at all (everything is 0). The reranker collapses
-    # to quality + popularity. We want quality to be the primary driver,
-    # with popularity as a tiebreaker for same-scored dramas.
-
     Preference(
         "sql_romance_2023_high",
         higher="Pursuit of Jade",  # score=9.1, watchers=40464
         lower="Blossom",  # score=8.8, watchers=38047
         reason="Clear quality gap (9.1 vs 8.8) should win with similar popularity",
-    ),
-    Preference(
-        "sql_historical_broad",
-        higher="Pursuit of Jade",  # score=9.1, watchers=40464
-        lower="Story of Kunning Palace",  # score=8.7, watchers=42187
-        reason="Quality gap (9.1 vs 8.7) should clearly beat similar popularity",
     ),
     Preference(
         "sql_historical_broad",

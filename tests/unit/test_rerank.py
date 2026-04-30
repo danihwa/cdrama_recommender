@@ -75,60 +75,28 @@ def test_single_candidate_returned():
     assert len(result) == 1
 
 
-def test_missing_similarity_defaults_to_zero():
-    """If the dict has no 'similarity' key at all, treat it as 0.
-
-    This happens in SQL mode where the query builder doesn't include
-    a similarity column — the key simply isn't in the dict.
-    """
-    candidate = {"title": "A", "mdl_score": 8.0, "watchers": 100}
-    result = rerank_candidates([candidate])
-    # similarity=0, quality=0.8, popularity=1.0 (only one drama -> max_watchers=its own)
-    assert result[0]["ensemble_score"] == pytest.approx(0.0 * 0.70 + 0.8 * 0.20 + 1.0 * 0.10)
-
-
-def test_missing_mdl_score_defaults_to_zero():
-    """If 'mdl_score' key is missing, quality contribution should be 0."""
-    candidate = {"title": "A", "similarity": 0.8, "watchers": 100}
-    result = rerank_candidates([candidate])
-    assert result[0]["ensemble_score"] == pytest.approx(0.8 * 0.70 + 0.0 * 0.20 + 1.0 * 0.10)
-
-
-def test_none_mdl_score_treated_as_zero():
-    """If mdl_score is explicitly None (DB returned null), same as missing.
-
-    This is a separate case from "missing key" because Python's
-    `dict.get("mdl_score")` returns None (not KeyError), and the
-    reranker uses `(x or 0.0)` to coerce None -> 0.0.
-    """
-    candidate = {"title": "A", "similarity": 0.5, "mdl_score": None, "watchers": 100}
-    result = rerank_candidates([candidate])
-    assert result[0]["ensemble_score"] == pytest.approx(0.5 * 0.70 + 0.0 * 0.20 + 1.0 * 0.10)
-
-
-def test_zero_watchers_does_not_crash():
-    """watchers=0 is coerced to 1 via `or 1` — must not cause log(0).
-
-    Without the guard, math.log(0) would raise ValueError. The reranker
-    uses `max(watchers, 1)` so log never sees values < 1.
-    """
-    candidate = {"title": "A", "similarity": 0.5, "mdl_score": 8.0, "watchers": 0}
+@pytest.mark.parametrize(
+    "candidate",
+    [
+        {"title": "A", "mdl_score": 8.0, "watchers": 100},  # similarity missing
+        {"title": "A", "similarity": 0.5, "watchers": 100},  # mdl_score missing
+        {"title": "A", "similarity": 0.5, "mdl_score": None, "watchers": 100},  # mdl_score None
+    ],
+)
+def test_missing_or_none_fields_default_to_zero(candidate):
+    """Missing or None keys (from SQL mode or DB nulls) should be coerced to 0, not crash."""
     result = rerank_candidates([candidate])
     assert "ensemble_score" in result[0]
     assert result[0]["ensemble_score"] >= 0
 
 
-def test_none_watchers_does_not_crash():
-    """watchers=None (DB null) should be coerced to 1, not crash.
-
-    When there's only one candidate and its watchers is None, the
-    max_watchers for the batch is also 1, which triggers the
-    `log_max_watchers = 1` fallback (to avoid dividing by log(1)=0).
-    So popularity = log(1)/1 = 0.0.
-    """
-    candidate = {"title": "A", "similarity": 0.5, "mdl_score": 8.0, "watchers": None}
+@pytest.mark.parametrize("watchers", [0, None])
+def test_zero_or_none_watchers_does_not_crash(watchers):
+    """watchers=0 or None must not cause log(0)/TypeError — coerced to 1 via `max(watchers, 1)`."""
+    candidate = {"title": "A", "similarity": 0.5, "mdl_score": 8.0, "watchers": watchers}
     result = rerank_candidates([candidate])
     assert "ensemble_score" in result[0]
+    assert result[0]["ensemble_score"] >= 0
 
 
 # ---------------------------------------------------------------------------

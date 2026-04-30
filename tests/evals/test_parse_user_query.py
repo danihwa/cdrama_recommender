@@ -1,9 +1,9 @@
-"""Integration tests for parse_user_query — real LLM calls against gpt-4o-mini.
+"""Eval suite for parse_user_query — real LLM calls against gpt-4o-mini.
 
-These are "eval-style" integration tests: they call the real OpenAI API to
-verify that the parser prompt + model combination produces correct structured
-output.  This is different from unit tests (pure logic, no I/O) and from
-mock-based integration tests (which test wiring, not LLM behaviour).
+These are golden-set evals: they call the real OpenAI API to verify that
+the parser prompt + model combination produces correct structured output.
+This is different from unit tests (pure logic, no I/O) and from
+integration tests (which test DB or service wiring, not LLM behaviour).
 
 Why real API calls instead of mocks?
     The whole point is to catch prompt regressions — if the LLM starts
@@ -31,8 +31,8 @@ and a title-not-in-genres guard that catches a known prompt regression.
 
 Cases live in tests/fixtures/parser_cases.py so the notebook can share them.
 
-Run all:   uv run pytest tests/integration/test_parse_user_query.py -v
-Run one:   uv run pytest tests/integration/test_parse_user_query.py -v -k "punctuation_title"
+Run all:   uv run pytest tests/evals/test_parse_user_query.py -v
+Run one:   uv run pytest tests/evals/test_parse_user_query.py -v -k "punctuation_title"
 Skip:      uv run pytest -m "not parser"
 """
 
@@ -43,7 +43,9 @@ from openai import OpenAI
 
 from src.recommender.models import QueryFilters
 from src.recommender.pipeline import parse_user_query
-from tests.fixtures.parser_cases import CASES
+from tests.fixtures.parser_cases import CASES, MODE_CASES
+
+ALL_CASES = CASES + MODE_CASES
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +114,7 @@ def _assert_invariants(result: QueryFilters, case: dict) -> None:
 #   uv run pytest -m "not parser"
 # The marker is registered in pyproject.toml so --strict-markers doesn't warn.
 @pytest.mark.parser
-@pytest.mark.parametrize("case", CASES, ids=[c["id"] for c in CASES])
+@pytest.mark.parametrize("case", ALL_CASES, ids=[c["id"] for c in ALL_CASES])
 def test_parse_user_query(case: dict, openai_client: OpenAI) -> None:
     result = parse_user_query(
         user_query=case["query"],
