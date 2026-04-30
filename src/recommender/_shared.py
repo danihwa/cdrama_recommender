@@ -14,6 +14,10 @@ from supabase import Client
 
 from src.recommender.models import QueryFilters
 
+# Cosine-similarity floor for the match_documents RPC. Rows below this are
+# dropped server-side, so the reranker never sees obvious non-matches.
+MATCH_THRESHOLD = 0.3
+
 
 def normalize_genres(genres: list[str]) -> list[str]:
     """
@@ -24,38 +28,52 @@ def normalize_genres(genres: list[str]) -> list[str]:
     return [g.lower().strip() for g in genres]
 
 
-def find_exclude_ids(titles: list[str], supabase: Client) -> list[int]:
+def lookup_drama_by_title(
+    title: str, supabase: Client, columns: str = "id"
+) -> dict | None:
+    """Look up a single drama by partial title match.
+
+    Uses ``ILIKE '%...%'`` for a forgiving substring match. If the first
+    attempt misses, retries once with punctuation stripped from the input —
+    catches LLM parser variations like "How Dare You?!" vs the stored
+    "How Dare You!?".
+
+    ``columns`` is passed straight to ``.select()`` so callers can fetch
+    just the id (for exclusions) or extra fields like ``embedding`` (for
+    reference search).
     """
-    Match drama titles to DB ids so they can be excluded from results.
+    # Build the list of patterns to try: original title first, then a
+    # punctuation-stripped fallback if it differs. [^\w\s] matches any
+    # char that's neither a word char (\w = [A-Za-z0-9_]) nor whitespace.
+    patterns = [title]
+    stripped = re.sub(r"[^\w\s]", "", title).strip()
+    if stripped and stripped != title:
+        patterns.append(stripped)
 
-    The downstream exclusion filter works on ids, not titles,
-    so each title has to be looked up first. ``ILIKE '%...%'``
-    gives a forgiving substring match.
-
-    If the first attempt misses, we retry once with non-word characters
-    stripped from the user's input. This catches punctuation mismatches
-    like "How Dare You?!" against a stored "How Dare You!?".
-    """
-
-    def _lookup(query: str) -> int | None:
+    for pattern in patterns:
         result = (
             supabase.table("cdramas")
-            .select("id")
-            .ilike("title", f"%{query}%")
+            .select(columns)
+            .ilike("title", f"%{pattern}%")
             .limit(1)
             .execute()
         )
-        return result.data[0]["id"] if result.data else None
+        if result.data:
+            return result.data[0]
+    return None
 
+
+def find_exclude_ids(titles: list[str], supabase: Client) -> list[int]:
+    """Match drama titles to DB ids so they can be excluded from results.
+
+    The downstream exclusion filter works on ids, not titles, so each
+    title has to be looked up first.
+    """
     ids: list[int] = []
     for title in titles:
-        match_id = _lookup(title)
-        if match_id is None:
-            stripped = re.sub(r"[^\w\s]", "", title).strip()
-            if stripped and stripped != title:
-                match_id = _lookup(stripped)
-        if match_id is not None:
-            ids.append(match_id)
+        row = lookup_drama_by_title(title, supabase)
+        if row is not None:
+            ids.append(row["id"])
         else:
             print(f"   Warning: '{title}' not found in DB — cannot exclude it")
     return ids
@@ -79,26 +97,28 @@ def vector_search(
     Unset filters are passed as ``None`` — the RPC's ``IS NULL`` check
     short-circuits each ``WHERE`` clause, so the filter is effectively
     disabled. ``QueryFilters`` already leaves ``min_year`` / ``min_score``
-    as ``None`` when unset; empty ``exclude_ids`` / ``filter_genres``
-    lists are explicitly coerced to ``None`` to match that shape.
+    as ``None`` when unset; empty list filters are explicitly coerced to
+    ``None`` here to match that shape.
     """
+    # Coerce empty lists to None so the RPC sees the same "unset" shape
+    # for every optional filter.
+    filter_exclude_ids = exclude_ids or None
+    filter_genres = normalize_genres(filters.genres) if filters.genres else None
+    filter_exclude_genres = (
+        normalize_genres(filters.exclude_genres) if filters.exclude_genres else None
+    )
+
     result = supabase.rpc(
         "match_documents",
         {
             "query_embedding": query_vector,
-            "match_threshold": 0.3,
+            "match_threshold": MATCH_THRESHOLD,
             "match_count": match_count,
             "filter_year": filters.min_year,
             "filter_score": filters.min_score,
-            "exclude_ids": exclude_ids if exclude_ids else None,
-            "filter_genres": (
-                normalize_genres(filters.genres) if filters.genres else None
-            ),
-            "exclude_genres": (
-                normalize_genres(filters.exclude_genres)
-                if filters.exclude_genres
-                else None
-            ),
+            "exclude_ids": filter_exclude_ids,
+            "filter_genres": filter_genres,
+            "exclude_genres": filter_exclude_genres,
         },
     ).execute()
     return result.data

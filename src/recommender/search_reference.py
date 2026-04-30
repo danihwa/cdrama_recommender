@@ -15,52 +15,32 @@ computed at ingestion.
 
 from __future__ import annotations
 
-import re
-
 from supabase import Client
 
-from src.recommender._shared import find_exclude_ids, vector_search
+from src.recommender._shared import (
+    find_exclude_ids,
+    lookup_drama_by_title,
+    vector_search,
+)
 from src.recommender.models import QueryFilters
 
 
 def get_reference_drama(
     title: str, supabase: Client
-) -> tuple[int | None, list[float] | None]:
-    """Fetches the id and embedding for a reference drama by title.
+) -> tuple[int, list[float]] | None:
+    """Fetches the (id, embedding) pair for a reference drama by title.
 
-    Falls back to a punctuation-stripped search if the exact title yields no
-    results, to handle LLM parser variations like 'How dare you?!' vs
-    'How Dare You!?'.
+    Returns ``None`` if no row matches — id and embedding always travel
+    together, so a single sentinel keeps the caller from null-checking
+    each field.
     """
-    # Nested helper so the "try raw, retry stripped" pair below doesn't
-    # duplicate the query. Kept inside because no other caller needs it —
-    # nested defs are a lightweight way to scope helpers to one function.
-    def search(pattern: str) -> list[dict]:
-        return (
-            supabase.table("cdramas")
-            .select("id, embedding, title")
-            .ilike("title", f"%{pattern}%")
-            .limit(1)
-            .execute()
-        ).data
+    row = lookup_drama_by_title(title, supabase, columns="id, embedding, title")
+    if row is None:
+        print(f"Warning: '{title}' not found in database")
+        return None
 
-    data = search(title)
-
-    # Retry with punctuation stripped. [^\w\s] matches any char that's
-    # neither a word char (\w = [A-Za-z0-9_]) nor whitespace (\s) —
-    # i.e. punctuation and symbols. The negation is what makes it concise.
-    if not data:
-        stripped = re.sub(r"[^\w\s]", "", title).strip()
-        if stripped and stripped != title:
-            data = search(stripped)
-
-    if data:
-        row = data[0]
-        print(f"   Found reference drama: '{row['title']}'")
-        return row["id"], row["embedding"]
-
-    print(f"Warning: '{title}' not found in database")
-    return None, None
+    print(f"   Found reference drama: '{row['title']}'")
+    return row["id"], row["embedding"]
 
 
 def retrieve_reference_candidates(
@@ -72,7 +52,9 @@ def retrieve_reference_candidates(
 
     Returns [] if the reference title is missing or cannot be resolved —
     the pipeline treats that as a no-results outcome rather than silently
-    falling back.
+    falling back. Deliberately no fallback to semantic search: if the user
+    named a specific drama, silently switching strategies would be more
+    confusing than admitting the miss.
     """
     # Narrow QueryFilters.reference_title (str | None) → str before
     # handing it to get_reference_drama, which only accepts str. Mirrors
@@ -82,23 +64,17 @@ def retrieve_reference_candidates(
         print("Warning: reference search requested but no reference_title provided")
         return []
 
-    exclude_ids = find_exclude_ids(filters.exclude_titles, supabase)
-
     print(f"\nReference drama: '{title}'")
-    ref_id, query_vector = get_reference_drama(title, supabase)
+    reference = get_reference_drama(title, supabase)
+    if reference is None:
+        return []
+    ref_id, query_vector = reference
 
     # An embedding has cosine similarity 1.0 with itself, so without this
     # the reference drama would always come back as its own top match.
-    if ref_id is not None:
-        exclude_ids = [ref_id] + exclude_ids
-
-    # Reference couldn't be resolved → return empty; the pipeline turns
-    # this into a no-results message. Deliberately no fallback to semantic
-    # search: if the user named a specific drama, silently switching
-    # strategies would be more confusing than admitting the miss.
-    if query_vector is None:
-        return []
-
+    # Resolved after the reference check so exclude lookups don't run
+    # when we're about to return [] anyway.
+    exclude_ids = [ref_id] + find_exclude_ids(filters.exclude_titles, supabase)
     return vector_search(query_vector, filters, exclude_ids, supabase, match_count)
 
 

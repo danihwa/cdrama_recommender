@@ -1,7 +1,5 @@
 import os
-from dotenv import load_dotenv
 from supabase import create_client, Client
-from postgrest.types import CountMethod
 from src.env import load_secrets
 
 
@@ -33,35 +31,3 @@ def get_db_connection() -> Client:
         raise ConnectionError(
             f"Failed to connect to Supabase: {e}"
         ) from e
-
-
-def test_connection():
-    """Verify Supabase connectivity by querying the cdramas table.
-
-    Prints the current row count on success, or troubleshooting tips
-    on failure.
-    """
-    try:
-        supabase = get_db_connection()
-        # perform a simple count query to verify the key has access
-        response = (
-            supabase.table("cdramas")
-            .select("*", count=CountMethod.exact)
-            .limit(1)
-            .execute()
-        )
-
-        print("Supabase SDK Connection Successful!")
-        print(f"Current rows in 'cdramas' table: {response.count}")
-
-    except Exception as e:
-        print(f"Connection failed: {e}")
-        print("\nTroubleshooting Tips:")
-        print("1. Ensure SUPABASE_URL is 'https://xxx.supabase.co'")
-        print(
-            "2. Ensure SUPABASE_SECRET_KEY is the 'secret' key (not the publishable key) to bypass RLS."
-        )
-
-
-if __name__ == "__main__":
-    test_connection()

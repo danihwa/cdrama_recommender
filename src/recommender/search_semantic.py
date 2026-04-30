@@ -28,9 +28,9 @@ EMBEDDING_MODEL = "text-embedding-3-large"
 EMBEDDING_DIMENSIONS = 3072
 
 
-def embed_query(text: str, client: OpenAI) -> list[float]:
+def embed_query(text: str, openai: OpenAI) -> list[float]:
     """Embeds a free-form query for vector search against drama embeddings."""
-    response = client.embeddings.create(
+    response = openai.embeddings.create(
         model=EMBEDDING_MODEL,
         dimensions=EMBEDDING_DIMENSIONS,
         input=text,
@@ -41,7 +41,7 @@ def embed_query(text: str, client: OpenAI) -> list[float]:
 def retrieve_semantic_candidates(
     filters: QueryFilters,
     supabase: Client,
-    openai_client: OpenAI,
+    openai: OpenAI,
     match_count: int,
     fallback_query: str = "",
 ) -> list[dict]:
@@ -58,7 +58,7 @@ def retrieve_semantic_candidates(
         return []
 
     print(f"\nSemantic query: '{query_text}'")
-    query_vector = embed_query(query_text, openai_client)
+    query_vector = embed_query(query_text, openai)
 
     exclude_ids = find_exclude_ids(filters.exclude_titles, supabase)
     return vector_search(query_vector, filters, exclude_ids, supabase, match_count)

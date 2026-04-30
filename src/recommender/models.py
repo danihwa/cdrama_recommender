@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Literal restricts a type to a fixed set of allowed values. SearchMode
 # can only ever be one of these three strings — type checkers and pydantic
 # will reject anything else.
-SearchMode = Literal["reference", "semantic", "sql"]
+SearchMode = Literal["reference", "semantic", "sql", "refused"]
 
 
 class QueryFilters(BaseModel):
@@ -24,6 +24,7 @@ class QueryFilters(BaseModel):
     #   - "reference": vector search anchored on an existing drama's embedding
     #   - "semantic":  vector search on an embedding of the user's own query text
     #   - "sql":       pure filter query (genre/year/rating), no embedding
+    #   - "refused":   query is off-topic, harmful, or adversarial — pipeline exits early
     #
     # Default is "reference" because it's the primary recommender flow
     # ("recommend something like X"). The parser LLM overrides this on
@@ -41,7 +42,7 @@ class QueryFilters(BaseModel):
 
     # Explicit genre names extracted from the query, e.g. ["Romance", "Historical"].
     # Used as a hard SQL filter (genres && ARRAY[...]) in every mode.
-    genres: list[str] = []
+    genres: list[str] = Field(default_factory=list)
 
     # Hard lower bounds for year and score — applied as SQL WHERE clauses.
     min_year: int | None = None
@@ -49,9 +50,9 @@ class QueryFilters(BaseModel):
 
     # Dramas the user says they already watched — excluded from results.
     # In reference mode, the reference drama is always excluded too.
-    exclude_titles: list[str] = []
+    exclude_titles: list[str] = Field(default_factory=list)
 
     # Genres the user explicitly wants avoided ("no romance", "not wuxia",
     # "avoid fantasy"). Applied as a NOT-overlap SQL filter alongside the
     # include list in `genres`.
-    exclude_genres: list[str] = []
+    exclude_genres: list[str] = Field(default_factory=list)
