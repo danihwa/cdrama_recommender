@@ -1,10 +1,13 @@
 import requests
 from bs4 import BeautifulSoup
 
-# MDL and many other websites block requests that don't look like a real browser
-# Sending a realistic User-Agent header can help bypass these blocks
+# Bot-style User-Agent following the Googlebot/Bingbot convention: looks
+# browser-ish enough to pass edge filters, but the `compatible;` token
+# identifies this as an automated client. If you re-run this scraper, add
+# your own `+mailto:you@example.com` token so the site owner can reach you.
+# Paired with a 1.5s delay in run_scrape.py.
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (compatible; cdrama-recommender/1.0)"
 }
 
 def get_page(url: str) -> BeautifulSoup:

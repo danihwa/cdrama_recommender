@@ -1,5 +1,9 @@
 # C-Drama Recommender
 
+> **Work in progress** — the RAG pipeline (parse → retrieve → rerank →
+> generate) works end to end, but the Streamlit UI in `app.py` is still
+> being polished.
+
 A small chat app that helps you find your next Chinese drama to watch.
 
 You can describe what you're in the mood for in plain English — a vibe, a
@@ -11,7 +15,7 @@ you a short, personal recommendation explaining why each one fits.
 
 Three different ways of asking, all in the same chat box:
 
-- **"Something like *Nirvana in Fire*, but shorter"** — anchor on a drama
+- **"Something like *Nirvana in Fire*, but no older than 2025"** — anchor on a drama
   you already know and find others with a similar feel.
 - **"A heroine with amnesia who's enemies with the male lead"** — describe
   the plot or mood when you can't remember the title.
@@ -98,3 +102,21 @@ end to end — scraping and cleaning data, embeddings and vector search,
 prompt engineering, evaluation, and wrapping a friendly UI around it.
 The domain is just an excuse: I watch a lot of C-dramas and the existing
 recommendation tools never quite get the vibe right.
+
+## A note on the data
+
+The catalogue was scraped from MyDramaList for educational and portfolio
+use only, in a single one-off run to seed the database (Kaggle's existing
+C-drama datasets were too out of date). The scraped data is not
+redistributed and is not committed to this repo (see `.gitignore`). I
+checked MyDramaList's `robots.txt` and only scraped paths it allows
+(`/search` and `/id/...`); the disallowed admin and write endpoints are
+not touched. The run was single-threaded with a 1.5-second delay between
+requests, fully resumable so retries didn't re-hit pages, and only
+collected publicly visible information. The original scrape used a
+generic browser User-Agent; the scraper in this repo now sends a
+bot-style identifier (`Mozilla/5.0 (compatible; cdrama-recommender/1.0)`)
+— if you re-run it, please add a `+mailto:` contact of your own so the
+site owner can reach you. If you're from MyDramaList and would like the project
+taken down or modified, please open a GitHub issue and I'll act on it
+the same day.
