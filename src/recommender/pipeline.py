@@ -17,6 +17,7 @@ Rerank → Generate. Each function below corresponds to one stage, and
 from __future__ import annotations
 
 import math
+from typing import Iterator
 
 from openai import OpenAI
 from supabase import Client
@@ -237,7 +238,7 @@ def generate_recommendation_stream(
     dramas: list[dict],
     openai: OpenAI,
     history: list[dict] | None = None,
-):
+) -> Iterator[str]:
     """Streaming variant of generate_recommendation — yields tokens.
 
     Mirrors generate_recommendation but uses stream=True so callers can
