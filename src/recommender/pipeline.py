@@ -232,6 +232,44 @@ Dramas to choose from:
     return content
 
 
+def generate_recommendation_stream(
+    user_query: str,
+    dramas: list[dict],
+    openai: OpenAI,
+    history: list[dict] | None = None,
+):
+    """Streaming variant of generate_recommendation — yields tokens.
+
+    Mirrors generate_recommendation but uses stream=True so callers can
+    forward partial output (e.g., over SSE) instead of waiting for the
+    whole response. Empty deltas (role-only or finish-reason chunks) are
+    skipped so callers always see real text.
+    """
+    recent_history = (history or [])[-HISTORY_MESSAGES:]
+    stream = openai.chat.completions.create(
+        model=MODEL,
+        max_tokens=MAX_RESPONSE_TOKENS,
+        stream=True,
+        messages=[
+            {"role": "system", "content": RECOMMEND_SYSTEM_PROMPT},
+            *recent_history,
+            {
+                "role": "user",
+                "content": f"""\
+My request: {user_query}
+
+Dramas to choose from:
+{build_context(dramas)}\
+""",
+            },
+        ],
+    )
+    for chunk in stream:
+        delta = chunk.choices[0].delta.content
+        if delta:
+            yield delta
+
+
 NO_RESULTS_MESSAGE = (
     "Sorry, no dramas found matching those criteria. Try relaxing the filters!"
 )
