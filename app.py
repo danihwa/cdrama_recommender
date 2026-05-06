@@ -1,17 +1,23 @@
 """Streamlit chat UI for the cdrama recommender.
 
-Run with: uv run streamlit run app.py
+Pure frontend — talks to the FastAPI backend over HTTP+SSE. The API URL
+is read from the API_URL env var, defaulting to localhost.
+
+Run with:
+    uv run uvicorn src.api.main:app --reload    # in one terminal
+    uv run streamlit run app.py                 # in another
 """
 
 from __future__ import annotations
 
+import json
+import os
+
+import httpx
 import streamlit as st
-from openai import OpenAI
 
-from src.database.connection import get_db_connection
-from src.env import load_secrets
-from src.recommender.pipeline import run_rag
 
+API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
 
 st.set_page_config(
     page_title="C-Drama Recommender",
@@ -20,21 +26,39 @@ st.set_page_config(
 )
 
 
-@st.cache_resource
-def get_clients():
-    load_secrets()
-    return get_db_connection(), OpenAI()
-
-
 @st.cache_data
 def load_drama_titles() -> list[str]:
-    """Fetch all drama titles from Supabase, sorted alphabetically."""
-    supabase = get_db_connection()
-    response = supabase.table("cdramas").select("title").order("title").execute()
-    return [row["title"] for row in response.data]
+    """Fetch the catalogue's drama titles from the API for the sidebar dropdown."""
+    response = httpx.get(f"{API_URL}/dramas", timeout=10.0)
+    response.raise_for_status()
+    return response.json()["titles"]
 
 
-supabase, openai = get_clients()
+def _iter_sse(response: httpx.Response):
+    """Parse an SSE stream into (event_name, data_dict) tuples.
+
+    Frames are separated by blank lines. Only `event:` and `data:` lines
+    are tracked; comments (starting with `:`) and other field types are
+    ignored. `data:` payloads are decoded as JSON.
+    """
+    event = None
+    data = None
+    for raw in response.iter_lines():
+        line = raw.rstrip("\r")
+        if not line:
+            if event is not None:
+                yield event, json.loads(data) if data else {}
+            event = None
+            data = None
+            continue
+        if line.startswith(":"):
+            continue
+        if line.startswith("event:"):
+            event = line.split(":", 1)[1].strip()
+        elif line.startswith("data:"):
+            data = line.split(":", 1)[1].strip()
+    if event is not None:
+        yield event, json.loads(data) if data else {}
 
 
 drama_titles = load_drama_titles()
@@ -290,15 +314,39 @@ with main_col:
             ]
 
             with st.chat_message("assistant"):
-                with st.spinner("Searching through the dramas..."):
-                    try:
-                        response, top = run_rag(request_text, supabase, openai, history)
-                    except Exception as e:
-                        response, top = f"Something went wrong: `{e}`", []
-                st.markdown(response)
+                placeholder = st.empty()
+                response_text = ""
+                top: list[dict] = []
+                try:
+                    with httpx.stream(
+                        "POST",
+                        f"{API_URL}/recommend",
+                        json={"message": request_text, "history": history},
+                        timeout=httpx.Timeout(30.0, read=None),
+                    ) as r:
+                        r.raise_for_status()
+                        for event, data in _iter_sse(r):
+                            if event == "candidates":
+                                top = data["candidates"]
+                            elif event == "token":
+                                response_text += data["text"]
+                                placeholder.markdown(response_text)
+                            elif event == "info":
+                                response_text = data["message"]
+                                placeholder.markdown(response_text)
+                            elif event == "error":
+                                response_text = data["message"]
+                                placeholder.warning(response_text)
+                            elif event == "done":
+                                break
+                except Exception as e:
+                    response_text = f"Something went wrong: `{e}`"
+                    placeholder.markdown(response_text)
 
             assistant_idx = len(st.session_state.messages)
-            st.session_state.messages.append({"role": "assistant", "content": response})
+            st.session_state.messages.append(
+                {"role": "assistant", "content": response_text}
+            )
             if top:
                 st.session_state.candidates[assistant_idx] = top
             st.rerun()
