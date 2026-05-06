@@ -62,15 +62,21 @@ SUPABASE_URL=...
 SUPABASE_KEY=...
 ```
 
-Then:
+Then start the API and the UI in two separate terminals:
 
 ```bash
-uv sync
+# Terminal 1 — the FastAPI backend
+uv run uvicorn src.api.main:app --reload
+
+# Terminal 2 — the Streamlit frontend
 uv run streamlit run app.py
 ```
 
-The chat UI opens in your browser. There's also a quick CLI run of the
-pipeline:
+The chat UI opens in your browser and talks to the API at
+`http://127.0.0.1:8000`. Override that with the `API_URL` env var if you
+run the backend on a different host or port.
+
+There's also a quick CLI run of the pipeline (no API involved):
 
 ```bash
 uv run src/recommender/pipeline.py
