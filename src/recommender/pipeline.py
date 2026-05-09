@@ -62,6 +62,37 @@ Leave a field null/empty if the user did not specify it — do not guess.\
 """
 
 
+def format_parsed_filters(filters: QueryFilters) -> str:
+    """Render the 'Parsed:' block for the REPL.
+
+    ``mode`` is always shown. Other fields are printed only when non-empty
+    and non-None — empty lists, ``None``, and the default 'reference'
+    mode-vs-explicit-reference distinction don't add information, so they
+    stay hidden to keep the block compact.
+
+    The two-space indent and 16-character left padding on the field name
+    match the column alignment in the spec sample.
+    """
+    lines = ["Parsed:", f"  {'mode':<16} = {filters.search_mode}"]
+
+    optional_fields: list[tuple[str, object]] = [
+        ("reference_title", filters.reference_title),
+        ("description", filters.description),
+        ("genres", filters.genres),
+        ("exclude_genres", filters.exclude_genres),
+        ("exclude_titles", filters.exclude_titles),
+        ("min_year", filters.min_year),
+        ("min_score", filters.min_score),
+    ]
+    for name, value in optional_fields:
+        if value is None:
+            continue
+        if isinstance(value, list) and not value:
+            continue
+        lines.append(f"  {name:<16} = {value}")
+    return "\n".join(lines)
+
+
 def parse_user_query(
     user_query: str, openai: OpenAI, history: list[dict] | None = None
 ) -> QueryFilters:
