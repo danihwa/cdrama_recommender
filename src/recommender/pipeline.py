@@ -17,7 +17,6 @@ Rerank → Generate. Each function below corresponds to one stage, and
 from __future__ import annotations
 
 import math
-from typing import Iterator
 
 import psycopg
 from openai import OpenAI
@@ -32,7 +31,6 @@ from src.recommender.search_sql import retrieve_sql_candidates
 
 MATCH_COUNT = 10  # candidates to fetch before reranking
 TOP_N = 5  # candidates passed to the generator after reranking
-MAX_RESPONSE_TOKENS = 500  # generator output budget
 
 # History window shared by parser and generator (6 messages ≈ last 3 turns).
 HISTORY_MESSAGES = 6
@@ -61,16 +59,6 @@ Field rules:
 - min_score: 'rating above X' = X, 'rating at least X' = X, 'highly rated'/'top rated' = 8.5, 'good rating' = 8.0.
 
 Leave a field null/empty if the user did not specify it — do not guess.\
-"""
-
-RECOMMEND_SYSTEM_PROMPT = """\
-You are a warm, enthusiastic Chinese drama recommender.
-Recommend ONLY dramas from the provided context — never invent titles.
-Pick the 3 best matches. For each, write one paragraph explaining specifically why it fits the user's request.
-Mention the MDL score as a quality signal.
-Do not repeat yourself. Each recommendation is exactly one paragraph.
-If you find yourself repeating content, stop.
-If the request is not about drama recommendations, decline politely and suggest the user ask about a genre, mood, or drama they enjoyed.\
 """
 
 
@@ -185,92 +173,6 @@ def _popularity_score(drama: dict, log_max_watchers: float) -> float:
     return math.log(watchers) / log_max_watchers
 
 
-def _format_drama(d: dict) -> str:
-    """Renders one drama as the four-line block the generator LLM expects."""
-    genres = ", ".join(d.get("genres") or [])
-    tags = ", ".join((d.get("tags") or [])[:5])
-    return (
-        f"Title: {d['title']} ({d['year']}) | MDL Score: {d['mdl_score']}\n"
-        f"Genres: {genres}\n"
-        f"Tags: {tags}\n"
-        f"Synopsis: {d['synopsis']}"
-    )
-
-
-def build_context(dramas: list[dict]) -> str:
-    """Formats candidate dramas into the text block the generator LLM sees."""
-    return "\n\n".join(_format_drama(d) for d in dramas)
-
-
-def generate_recommendation(
-    user_query: str,
-    dramas: list[dict],
-    openai: OpenAI,
-    history: list[dict] | None = None,
-) -> str:
-    """Generates a personalised recommendation grounded in the provided candidates."""
-    recent_history = (history or [])[-HISTORY_MESSAGES:]
-    response = openai.chat.completions.create(
-        model=MODEL,
-        max_tokens=MAX_RESPONSE_TOKENS,
-        messages=[
-            {"role": "system", "content": RECOMMEND_SYSTEM_PROMPT},
-            *recent_history,
-            {
-                "role": "user",
-                "content": f"""\
-My request: {user_query}
-
-Dramas to choose from:
-{build_context(dramas)}\
-""",
-            },
-        ],
-    )
-    content = response.choices[0].message.content
-    if content is None:
-        raise ValueError("Generator LLM returned no content")
-    return content
-
-
-def generate_recommendation_stream(
-    user_query: str,
-    dramas: list[dict],
-    openai: OpenAI,
-    history: list[dict] | None = None,
-) -> Iterator[str]:
-    """Streaming variant of generate_recommendation — yields tokens.
-
-    Mirrors generate_recommendation but uses stream=True so callers can
-    forward partial output (e.g., over SSE) instead of waiting for the
-    whole response. Empty deltas (role-only or finish-reason chunks) are
-    skipped so callers always see real text.
-    """
-    recent_history = (history or [])[-HISTORY_MESSAGES:]
-    stream = openai.chat.completions.create(
-        model=MODEL,
-        max_tokens=MAX_RESPONSE_TOKENS,
-        stream=True,
-        messages=[
-            {"role": "system", "content": RECOMMEND_SYSTEM_PROMPT},
-            *recent_history,
-            {
-                "role": "user",
-                "content": f"""\
-My request: {user_query}
-
-Dramas to choose from:
-{build_context(dramas)}\
-""",
-            },
-        ],
-    )
-    for chunk in stream:
-        delta = chunk.choices[0].delta.content
-        if delta:
-            yield delta
-
-
 NO_RESULTS_MESSAGE = (
     "Sorry, no dramas found matching those criteria. Try relaxing the filters!"
 )
@@ -286,7 +188,7 @@ def run_rag(
     conn: psycopg.Connection,
     openai: OpenAI,
     history: list[dict] | None = None,
-) -> tuple[str, list[dict]]:
+) -> list[dict]:
     """Full RAG pipeline: Parse → Route → Retrieve → Rerank → Generate."""
     history = history or []
 
@@ -317,11 +219,7 @@ def run_rag(
             f"score: {d.get('mdl_score', 0)}"
         )
 
-    # Stage 5 — Generate
-    top = reranked[:TOP_N]
-    print("\nGenerating recommendations...\n")
-    response = generate_recommendation(user_query, top, openai, history)
-    return response, top
+    return reranked[:TOP_N]
 
 
 if __name__ == "__main__":
