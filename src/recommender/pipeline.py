@@ -19,8 +19,8 @@ from __future__ import annotations
 import math
 from typing import Iterator
 
+import psycopg
 from openai import OpenAI
-from supabase import Client
 
 from src.database.connection import get_db_connection
 from src.env import load_secrets
@@ -107,21 +107,21 @@ def parse_user_query(
 def retrieve_candidates(
     user_query: str,
     filters: QueryFilters,
-    supabase: Client,
+    conn: psycopg.Connection,
     openai: OpenAI,
     match_count: int = MATCH_COUNT,
 ) -> list[dict]:
     """Routes to the right retrieval strategy based on filters.search_mode."""
     if filters.search_mode == "reference":
-        return retrieve_reference_candidates(filters, supabase, match_count)
+        return retrieve_reference_candidates(filters, conn, match_count)
 
     if filters.search_mode == "semantic":
         return retrieve_semantic_candidates(
-            filters, supabase, openai, match_count, fallback_query=user_query
+            filters, conn, openai, match_count, fallback_query=user_query
         )
 
     if filters.search_mode == "sql":
-        return retrieve_sql_candidates(filters, supabase, match_count)
+        return retrieve_sql_candidates(filters, conn, match_count)
 
     # Keeps the type checker happy and would catch a
     # future bug if fourth mode was added and the router wasn't updated.
@@ -283,7 +283,7 @@ REFUSED_MESSAGE = (
 
 def run_rag(
     user_query: str,
-    supabase: Client,
+    conn: psycopg.Connection,
     openai: OpenAI,
     history: list[dict] | None = None,
 ) -> tuple[str, list[dict]]:
@@ -300,7 +300,7 @@ def run_rag(
         return REFUSED_MESSAGE, []
 
     # Stages 2+3 — Route + Retrieve: pick the right search strategy and pull candidates.
-    candidates = retrieve_candidates(user_query, filters, supabase, openai)
+    candidates = retrieve_candidates(user_query, filters, conn, openai)
 
     if not candidates:
         return NO_RESULTS_MESSAGE, []
@@ -328,11 +328,11 @@ if __name__ == "__main__":
     # to run: uv run src/recommender/pipeline.py
     load_secrets()
     openai_client = OpenAI()
-    supabase_client = get_db_connection()
+    conn = get_db_connection()
 
     query = "Recommend me something similar to How Dare You!? I already saw Dream within a dream. The drama should be rated above 8"
     print("=" * 60)
     print(f"Query: {query}")
     print("=" * 60)
-    response, _ = run_rag(query, supabase_client, openai_client)
+    response, _ = run_rag(query, conn, openai_client)
     print(response)
