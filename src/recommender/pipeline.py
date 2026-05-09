@@ -227,7 +227,8 @@ def rerank_candidates(
 
     for drama in candidates:
         similarity = drama.get("similarity", 0.0)
-        quality = (drama.get("mdl_score") or 0.0) / 10.0
+        # psycopg returns NUMERIC as Decimal; coerce for arithmetic.
+        quality = float(drama.get("mdl_score") or 0.0) / 10.0
         popularity = _popularity_score(drama, log_max_watchers)
         drama["ensemble_score"] = (
             w_sim * similarity + w_quality * quality + w_popularity * popularity
