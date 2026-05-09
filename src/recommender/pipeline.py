@@ -93,6 +93,43 @@ def format_parsed_filters(filters: QueryFilters) -> str:
     return "\n".join(lines)
 
 
+RESULTS_HEADER = "=" * 60
+TITLE_WIDTH = 38  # left-pad title to this width so columns line up
+
+
+def format_results(reranked: list[dict]) -> str:
+    """Render the top reranked candidates as a numbered fixed-width table.
+
+    SQL-mode candidates have similarity 0 across the board (no vector
+    search ran). Detecting that — every row's similarity is exactly 0 —
+    lets us print an em dash instead of a wall of ``0.000``s, which
+    otherwise looks like every drama is equally bad.
+    """
+    if not reranked:
+        return ""
+
+    sql_mode = all((d.get("similarity") or 0.0) == 0.0 for d in reranked)
+
+    lines = [
+        RESULTS_HEADER,
+        f"Top {len(reranked)} candidates:",
+        RESULTS_HEADER,
+    ]
+    for i, d in enumerate(reranked, start=1):
+        title = d["title"]
+        year = d["year"]
+        score = d["mdl_score"]
+        similarity_field = (
+            "similarity   —"
+            if sql_mode
+            else f"similarity {(d.get('similarity') or 0.0):.3f}"
+        )
+        lines.append(
+            f"{i:>2}. [{year}] {title:<{TITLE_WIDTH}} - score {score}, {similarity_field}"
+        )
+    return "\n".join(lines)
+
+
 def parse_user_query(
     user_query: str, openai: OpenAI, history: list[dict] | None = None
 ) -> QueryFilters:
