@@ -29,8 +29,8 @@ from src.recommender.search_semantic import retrieve_semantic_candidates
 from src.recommender.search_sql import retrieve_sql_candidates
 
 
-MATCH_COUNT = 10  # candidates to fetch before reranking
-TOP_N = 5  # candidates passed to the generator after reranking
+MATCH_COUNT = 14  # candidates to fetch before reranking
+TOP_N = 7         # candidates shown after reranking
 
 # History window shared by parser and generator (6 messages ≈ last 3 turns).
 HISTORY_MESSAGES = 6
@@ -256,49 +256,59 @@ def run_rag(
     conn: psycopg.Connection,
     openai: OpenAI,
     history: list[dict] | None = None,
-) -> list[dict]:
-    """Full RAG pipeline: Parse → Route → Retrieve → Rerank → Generate."""
+) -> str:
+    """Full pipeline: Parse → Route → Retrieve → Rerank → Format.
+
+    Returns a single human-readable string. Refusal and no-result cases
+    return their canned messages; otherwise returns the parsed-filters
+    block followed by the formatted results table.
+    """
     history = history or []
 
-    # Stage 1 — Parse: LLM turns natural language into QueryFilters.
     print("Parsing your request...")
     filters: QueryFilters = parse_user_query(user_query, openai, history)
-    print(f"   Filters: {filters.model_dump()}")
-    print(f"   Mode: {filters.search_mode}")
 
     if filters.search_mode == "refused":
-        return REFUSED_MESSAGE, []
+        return REFUSED_MESSAGE
 
-    # Stages 2+3 — Route + Retrieve: pick the right search strategy and pull candidates.
+    print(format_parsed_filters(filters))
+    print("\nSearching...\n")
+
     candidates = retrieve_candidates(user_query, filters, conn, openai)
-
     if not candidates:
-        return NO_RESULTS_MESSAGE, []
+        return NO_RESULTS_MESSAGE
 
-    # Stage 4 — Rerank: blend similarity with quality + popularity.
-    print(f"\nReranking {len(candidates)} candidates...")
     reranked = rerank_candidates(candidates)
-
-    for d in reranked[:TOP_N]:
-        print(
-            f"   {d['title']:<40} "
-            f"ensemble: {d.get('ensemble_score', 0):.3f} | "
-            f"sim: {d.get('similarity', 0):.3f} | "
-            f"score: {d.get('mdl_score', 0)}"
-        )
-
-    return reranked[:TOP_N]
+    return format_results(reranked[:TOP_N])
 
 
 if __name__ == "__main__":
     # to run: uv run src/recommender/pipeline.py
     load_secrets()
     openai_client = OpenAI()
-    conn = get_db_connection()
+    db_conn = get_db_connection()
 
-    query = "Recommend me something similar to How Dare You!? I already saw Dream within a dream. The drama should be rated above 8"
-    print("=" * 60)
-    print(f"Query: {query}")
-    print("=" * 60)
-    response, _ = run_rag(query, conn, openai_client)
-    print(response)
+    print("C-Drama recommender — type your query, or 'exit' to quit.\n")
+    history: list[dict] = []
+    try:
+        while True:
+            try:
+                user_query = input("> ").strip()
+            except EOFError:
+                print()
+                break
+            if not user_query:
+                continue
+            if user_query.lower() in {"exit", "quit"}:
+                break
+
+            output = run_rag(user_query, db_conn, openai_client, history)
+            print(output)
+            print()
+
+            history.append({"role": "user", "content": user_query})
+            history.append({"role": "assistant", "content": output})
+    except KeyboardInterrupt:
+        print()
+    finally:
+        db_conn.close()
