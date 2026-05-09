@@ -45,8 +45,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import psycopg
 from openai import OpenAI
-from supabase import Client
 
 from src.database.connection import get_db_connection
 from src.env import load_secrets
@@ -181,7 +181,7 @@ QUERIES: list[dict] = [
 ]
 
 
-def collect_all(supabase: Client, openai: OpenAI) -> list[dict]:
+def collect_all(conn: psycopg.Connection, openai: OpenAI) -> list[dict]:
     """Run each query and return labelled candidate sets."""
     results = []
     for q in QUERIES:
@@ -193,13 +193,13 @@ def collect_all(supabase: Client, openai: OpenAI) -> list[dict]:
         print(f"Collecting: {label} (mode={mode})")
 
         if mode == "reference":
-            candidates = retrieve_reference_candidates(filters, supabase, MATCH_COUNT)
+            candidates = retrieve_reference_candidates(filters, conn, MATCH_COUNT)
         elif mode == "semantic":
             candidates = retrieve_semantic_candidates(
-                filters, supabase, openai, MATCH_COUNT
+                filters, conn, openai, MATCH_COUNT
             )
         elif mode == "sql":
-            candidates = retrieve_sql_candidates(filters, supabase, MATCH_COUNT)
+            candidates = retrieve_sql_candidates(filters, conn, MATCH_COUNT)
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
@@ -227,10 +227,10 @@ def collect_all(supabase: Client, openai: OpenAI) -> list[dict]:
 
 def main() -> None:
     load_secrets()
-    supabase = get_db_connection()
+    conn = get_db_connection()
     openai = OpenAI()
 
-    results = collect_all(supabase, openai)
+    results = collect_all(conn, openai)
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_PATH.write_text(json.dumps(results, indent=2, default=str))

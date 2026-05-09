@@ -14,8 +14,8 @@ identical in both modes — only the source of the query vector differs.
 
 from __future__ import annotations
 
+import psycopg
 from openai import OpenAI
-from supabase import Client
 
 from src.recommender._shared import find_exclude_ids, vector_search
 from src.recommender.models import QueryFilters
@@ -40,7 +40,7 @@ def embed_query(text: str, openai: OpenAI) -> list[float]:
 
 def retrieve_semantic_candidates(
     filters: QueryFilters,
-    supabase: Client,
+    conn: psycopg.Connection,
     openai: OpenAI,
     match_count: int,
     fallback_query: str = "",
@@ -60,8 +60,8 @@ def retrieve_semantic_candidates(
     print(f"\nSemantic query: '{query_text}'")
     query_vector = embed_query(query_text, openai)
 
-    exclude_ids = find_exclude_ids(filters.exclude_titles, supabase)
-    return vector_search(query_vector, filters, exclude_ids, supabase, match_count)
+    exclude_ids = find_exclude_ids(filters.exclude_titles, conn)
+    return vector_search(query_vector, filters, exclude_ids, conn, match_count)
 
 
 if __name__ == "__main__":

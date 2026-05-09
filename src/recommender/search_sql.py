@@ -6,16 +6,17 @@ rated above 8") with no plot description and no reference drama. There's
 nothing to embed here, so the vector layer is skipped entirely and just run
 a plain SQL query against cdramas.
 
-Note that the other two modes also apply these same filters. 
-The difference is that semantic/reference do so via the match_documents RPC
-(Postgres function) while this mode uses the Supabase query builder
-directly (no embedding to join against).
+Note that the other two modes also apply these same filters.
+The difference is that semantic/reference do so via the match_documents
+Postgres function (which combines cosine search with the filters), while
+this mode runs a plain SQL query — there is no embedding to join against.
 """
 
 
 from __future__ import annotations
 
-from supabase import Client
+import psycopg
+from psycopg.rows import dict_row
 
 from src.recommender._shared import find_exclude_ids, normalize_genres
 from src.recommender.models import QueryFilters
@@ -29,7 +30,7 @@ SELECT_COLUMNS = (
 
 def retrieve_sql_candidates(
     filters: QueryFilters,
-    supabase: Client,
+    conn: psycopg.Connection,
     match_count: int,
 ) -> list[dict]:
     """Pure filter query — no embedding, no similarity.
@@ -37,38 +38,45 @@ def retrieve_sql_candidates(
     Ordered by mdl_score DESC so the reranker (which will see similarity=0
     for every row) still gets a quality-first starting order.
     The ensemble score collapses to quality + popularity.
+
+    Each filter is appended only when set, mirroring the IS NULL guards
+    used by ``match_documents`` for the vector modes.
     """
-    exclude_ids = find_exclude_ids(filters.exclude_titles, supabase)
+    exclude_ids = find_exclude_ids(filters.exclude_titles, conn)
 
-    # Start with a base query and chain filters onto it conditionally.
-    # The Supabase query builder is lazy — nothing hits the DB until
-    # .execute() is called — so reassigning `query` just accumulates
-    # WHERE clauses without triggering any network round-trips.
-    query = supabase.table("cdramas").select(SELECT_COLUMNS)
+    where_clauses: list[str] = []
+    params: list[object] = []
 
-    # gte = "greater than or equal". Only apply the clause if the filter is set
     if filters.min_year is not None:
-        query = query.gte("year", filters.min_year)
+        where_clauses.append("year >= %s")
+        params.append(filters.min_year)
     if filters.min_score is not None:
-        query = query.gte("mdl_score", filters.min_score)
-    # overlaps maps to Postgres array overlap (&&): true if the drama's
-    # genres share at least one element with the filter 
-    # contains would require the drama to have ALL the listed genres.
+        where_clauses.append("mdl_score >= %s")
+        params.append(filters.min_score)
+    # && is the Postgres array overlap operator: true if the drama's
+    # genres share at least one element with the filter list. Using @>
+    # (contains) instead would require the drama to have ALL listed genres.
     if filters.genres:
-        query = query.overlaps("genres", normalize_genres(filters.genres))
+        where_clauses.append("genres && %s")
+        params.append(normalize_genres(filters.genres))
     if filters.exclude_genres:
-        query = query.not_.overlaps(
-            "genres", normalize_genres(filters.exclude_genres)
-        )
+        where_clauses.append("NOT (genres && %s)")
+        params.append(normalize_genres(filters.exclude_genres))
     if exclude_ids:
-        query = query.not_.in_("id", exclude_ids)
+        where_clauses.append("NOT (id = ANY(%s))")
+        params.append(exclude_ids)
 
-    result = (
-        query.order("mdl_score", desc=True)
-        .limit(match_count)
-        .execute()
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+    sql = (
+        f"SELECT {SELECT_COLUMNS} FROM cdramas "
+        f"{where_sql} "
+        f"ORDER BY mdl_score DESC LIMIT %s"
     )
-    return result.data
+    params.append(match_count)
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(sql, params)
+        return cur.fetchall()
 
 
 if __name__ == "__main__":

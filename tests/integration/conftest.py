@@ -5,15 +5,15 @@ automatically available to every test in this directory (and below)
 without needing an import.  pytest discovers it by name convention.
 """
 
+import psycopg
 import pytest
-from supabase import Client
 
 from src.database.connection import get_db_connection
 from src.env import load_secrets
 
 
 @pytest.fixture(scope="module")
-def supabase() -> Client:
-    """Authenticated Supabase client for DB-hitting integration tests."""
+def db_conn() -> psycopg.Connection:
+    """psycopg connection for DB-hitting integration tests."""
     load_secrets()
     return get_db_connection()

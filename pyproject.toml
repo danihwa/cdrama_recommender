@@ -17,15 +17,15 @@ dependencies = [
     "matplotlib>=3.10.8",
     "openai>=2.31.0",
     "pandas>=3.0.2",
+    "pgvector>=0.3",
+    "psycopg[binary]>=3.2",
     "pyarrow>=23.0.1",
     "pytest>=9.0.3",
     "requests>=2.33.1",
-    "streamlit>=1.56.0",
-    "supabase>=2.28.3",
 ]
 
 [tool.pytest.ini_options]
 markers = [
-    "db: tests that hit the real Supabase DB (deselect with -m 'not db')",
+    "db: tests that hit local Postgres (deselect with -m 'not db')",
     "parser: tests that call the OpenAI API via parse_user_query (deselect with -m 'not parser')",
 ]

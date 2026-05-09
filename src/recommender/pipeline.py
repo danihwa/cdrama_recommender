@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import math
 
+import psycopg
 from openai import OpenAI
-from supabase import Client
 
 from src.database.connection import get_db_connection
 from src.env import load_secrets
@@ -29,9 +29,8 @@ from src.recommender.search_semantic import retrieve_semantic_candidates
 from src.recommender.search_sql import retrieve_sql_candidates
 
 
-MATCH_COUNT = 10  # candidates to fetch before reranking
-TOP_N = 5  # candidates passed to the generator after reranking
-MAX_RESPONSE_TOKENS = 500  # generator output budget
+MATCH_COUNT = 14  # candidates to fetch before reranking
+TOP_N = 7         # candidates shown after reranking
 
 # History window shared by parser and generator (6 messages ≈ last 3 turns).
 HISTORY_MESSAGES = 6
@@ -62,15 +61,73 @@ Field rules:
 Leave a field null/empty if the user did not specify it — do not guess.\
 """
 
-RECOMMEND_SYSTEM_PROMPT = """\
-You are a warm, enthusiastic Chinese drama recommender.
-Recommend ONLY dramas from the provided context — never invent titles.
-Pick the 3 best matches. For each, write one paragraph explaining specifically why it fits the user's request.
-Mention the MDL score as a quality signal.
-Do not repeat yourself. Each recommendation is exactly one paragraph.
-If you find yourself repeating content, stop.
-If the request is not about drama recommendations, decline politely and suggest the user ask about a genre, mood, or drama they enjoyed.\
-"""
+
+def format_parsed_filters(filters: QueryFilters) -> str:
+    """Render the 'Parsed:' block for the REPL.
+
+    ``mode`` is always shown. Other fields are printed only when non-empty
+    and non-None — empty lists, ``None``, and the default 'reference'
+    mode-vs-explicit-reference distinction don't add information, so they
+    stay hidden to keep the block compact.
+
+    The two-space indent and 16-character left padding on the field name
+    match the column alignment in the spec sample.
+    """
+    lines = ["Parsed:", f"  {'mode':<16} = {filters.search_mode}"]
+
+    optional_fields: list[tuple[str, object]] = [
+        ("reference_title", filters.reference_title),
+        ("description", filters.description),
+        ("genres", filters.genres),
+        ("exclude_genres", filters.exclude_genres),
+        ("exclude_titles", filters.exclude_titles),
+        ("min_year", filters.min_year),
+        ("min_score", filters.min_score),
+    ]
+    for name, value in optional_fields:
+        if value is None:
+            continue
+        if isinstance(value, list) and not value:
+            continue
+        lines.append(f"  {name:<16} = {value}")
+    return "\n".join(lines)
+
+
+RESULTS_HEADER = "=" * 60
+TITLE_WIDTH = 38  # left-pad title to this width so columns line up
+
+
+def format_results(reranked: list[dict]) -> str:
+    """Render the top reranked candidates as a numbered fixed-width table.
+
+    SQL-mode candidates have similarity 0 across the board (no vector
+    search ran). Detecting that — every row's similarity is exactly 0 —
+    lets us print an em dash instead of a wall of ``0.000``s, which
+    otherwise looks like every drama is equally bad.
+    """
+    if not reranked:
+        return ""
+
+    sql_mode = all((d.get("similarity") or 0.0) == 0.0 for d in reranked)
+
+    lines = [
+        RESULTS_HEADER,
+        f"Top {len(reranked)} candidates:",
+        RESULTS_HEADER,
+    ]
+    for i, d in enumerate(reranked, start=1):
+        title = d["title"]
+        year = d["year"]
+        score = d["mdl_score"]
+        similarity_field = (
+            "similarity   —"
+            if sql_mode
+            else f"similarity {(d.get('similarity') or 0.0):.3f}"
+        )
+        lines.append(
+            f"{i:>2}. [{year}] {title:<{TITLE_WIDTH}} - score {score}, {similarity_field}"
+        )
+    return "\n".join(lines)
 
 
 def parse_user_query(
@@ -106,21 +163,21 @@ def parse_user_query(
 def retrieve_candidates(
     user_query: str,
     filters: QueryFilters,
-    supabase: Client,
+    conn: psycopg.Connection,
     openai: OpenAI,
     match_count: int = MATCH_COUNT,
 ) -> list[dict]:
     """Routes to the right retrieval strategy based on filters.search_mode."""
     if filters.search_mode == "reference":
-        return retrieve_reference_candidates(filters, supabase, match_count)
+        return retrieve_reference_candidates(filters, conn, match_count)
 
     if filters.search_mode == "semantic":
         return retrieve_semantic_candidates(
-            filters, supabase, openai, match_count, fallback_query=user_query
+            filters, conn, openai, match_count, fallback_query=user_query
         )
 
     if filters.search_mode == "sql":
-        return retrieve_sql_candidates(filters, supabase, match_count)
+        return retrieve_sql_candidates(filters, conn, match_count)
 
     # Keeps the type checker happy and would catch a
     # future bug if fourth mode was added and the router wasn't updated.
@@ -170,7 +227,8 @@ def rerank_candidates(
 
     for drama in candidates:
         similarity = drama.get("similarity", 0.0)
-        quality = (drama.get("mdl_score") or 0.0) / 10.0
+        # psycopg returns NUMERIC as Decimal; coerce for arithmetic.
+        quality = float(drama.get("mdl_score") or 0.0) / 10.0
         popularity = _popularity_score(drama, log_max_watchers)
         drama["ensemble_score"] = (
             w_sim * similarity + w_quality * quality + w_popularity * popularity
@@ -182,54 +240,6 @@ def _popularity_score(drama: dict, log_max_watchers: float) -> float:
     """Log-scaled watcher count, normalised to [0, 1] against the batch max."""
     watchers = drama.get("watchers") or 1
     return math.log(watchers) / log_max_watchers
-
-
-def _format_drama(d: dict) -> str:
-    """Renders one drama as the four-line block the generator LLM expects."""
-    genres = ", ".join(d.get("genres") or [])
-    tags = ", ".join((d.get("tags") or [])[:5])
-    return (
-        f"Title: {d['title']} ({d['year']}) | MDL Score: {d['mdl_score']}\n"
-        f"Genres: {genres}\n"
-        f"Tags: {tags}\n"
-        f"Synopsis: {d['synopsis']}"
-    )
-
-
-def build_context(dramas: list[dict]) -> str:
-    """Formats candidate dramas into the text block the generator LLM sees."""
-    return "\n\n".join(_format_drama(d) for d in dramas)
-
-
-def generate_recommendation(
-    user_query: str,
-    dramas: list[dict],
-    openai: OpenAI,
-    history: list[dict] | None = None,
-) -> str:
-    """Generates a personalised recommendation grounded in the provided candidates."""
-    recent_history = (history or [])[-HISTORY_MESSAGES:]
-    response = openai.chat.completions.create(
-        model=MODEL,
-        max_tokens=MAX_RESPONSE_TOKENS,
-        messages=[
-            {"role": "system", "content": RECOMMEND_SYSTEM_PROMPT},
-            *recent_history,
-            {
-                "role": "user",
-                "content": f"""\
-My request: {user_query}
-
-Dramas to choose from:
-{build_context(dramas)}\
-""",
-            },
-        ],
-    )
-    content = response.choices[0].message.content
-    if content is None:
-        raise ValueError("Generator LLM returned no content")
-    return content
 
 
 NO_RESULTS_MESSAGE = (
@@ -244,56 +254,62 @@ REFUSED_MESSAGE = (
 
 def run_rag(
     user_query: str,
-    supabase: Client,
+    conn: psycopg.Connection,
     openai: OpenAI,
     history: list[dict] | None = None,
-) -> tuple[str, list[dict]]:
-    """Full RAG pipeline: Parse → Route → Retrieve → Rerank → Generate."""
+) -> str:
+    """Full pipeline: Parse → Route → Retrieve → Rerank → Format.
+
+    Returns a single human-readable string. Refusal and no-result cases
+    return their canned messages; otherwise returns the parsed-filters
+    block followed by the formatted results table.
+    """
     history = history or []
 
-    # Stage 1 — Parse: LLM turns natural language into QueryFilters.
     print("Parsing your request...")
     filters: QueryFilters = parse_user_query(user_query, openai, history)
-    print(f"   Filters: {filters.model_dump()}")
-    print(f"   Mode: {filters.search_mode}")
 
     if filters.search_mode == "refused":
-        return REFUSED_MESSAGE, []
+        return REFUSED_MESSAGE
 
-    # Stages 2+3 — Route + Retrieve: pick the right search strategy and pull candidates.
-    candidates = retrieve_candidates(user_query, filters, supabase, openai)
+    print(format_parsed_filters(filters))
+    print("\nSearching...\n")
 
+    candidates = retrieve_candidates(user_query, filters, conn, openai)
     if not candidates:
-        return NO_RESULTS_MESSAGE, []
+        return NO_RESULTS_MESSAGE
 
-    # Stage 4 — Rerank: blend similarity with quality + popularity.
-    print(f"\nReranking {len(candidates)} candidates...")
     reranked = rerank_candidates(candidates)
-
-    for d in reranked[:TOP_N]:
-        print(
-            f"   {d['title']:<40} "
-            f"ensemble: {d.get('ensemble_score', 0):.3f} | "
-            f"sim: {d.get('similarity', 0):.3f} | "
-            f"score: {d.get('mdl_score', 0)}"
-        )
-
-    # Stage 5 — Generate
-    top = reranked[:TOP_N]
-    print("\nGenerating recommendations...\n")
-    response = generate_recommendation(user_query, top, openai, history)
-    return response, top
+    return format_results(reranked[:TOP_N])
 
 
 if __name__ == "__main__":
     # to run: uv run src/recommender/pipeline.py
     load_secrets()
     openai_client = OpenAI()
-    supabase_client = get_db_connection()
+    db_conn = get_db_connection()
 
-    query = "Recommend me something similar to How Dare You!? I already saw Dream within a dream. The drama should be rated above 8"
-    print("=" * 60)
-    print(f"Query: {query}")
-    print("=" * 60)
-    response, _ = run_rag(query, supabase_client, openai_client)
-    print(response)
+    print("C-Drama recommender — type your query, or 'exit' to quit.\n")
+    history: list[dict] = []
+    try:
+        while True:
+            try:
+                user_query = input("> ").strip()
+            except EOFError:
+                print()
+                break
+            if not user_query:
+                continue
+            if user_query.lower() in {"exit", "quit"}:
+                break
+
+            output = run_rag(user_query, db_conn, openai_client, history)
+            print(output)
+            print()
+
+            history.append({"role": "user", "content": user_query})
+            history.append({"role": "assistant", "content": output})
+    except KeyboardInterrupt:
+        print()
+    finally:
+        db_conn.close()

@@ -15,7 +15,7 @@ computed at ingestion.
 
 from __future__ import annotations
 
-from supabase import Client
+import psycopg
 
 from src.recommender._shared import (
     find_exclude_ids,
@@ -26,7 +26,7 @@ from src.recommender.models import QueryFilters
 
 
 def get_reference_drama(
-    title: str, supabase: Client
+    title: str, conn: psycopg.Connection
 ) -> tuple[int, list[float]] | None:
     """Fetches the (id, embedding) pair for a reference drama by title.
 
@@ -34,7 +34,7 @@ def get_reference_drama(
     together, so a single sentinel keeps the caller from null-checking
     each field.
     """
-    row = lookup_drama_by_title(title, supabase, columns="id, embedding, title")
+    row = lookup_drama_by_title(title, conn, columns="id, embedding, title")
     if row is None:
         print(f"Warning: '{title}' not found in database")
         return None
@@ -45,7 +45,7 @@ def get_reference_drama(
 
 def retrieve_reference_candidates(
     filters: QueryFilters,
-    supabase: Client,
+    conn: psycopg.Connection,
     match_count: int,
 ) -> list[dict]:
     """Vector search anchored on an existing drama's embedding.
@@ -65,7 +65,7 @@ def retrieve_reference_candidates(
         return []
 
     print(f"\nReference drama: '{title}'")
-    reference = get_reference_drama(title, supabase)
+    reference = get_reference_drama(title, conn)
     if reference is None:
         return []
     ref_id, query_vector = reference
@@ -74,8 +74,8 @@ def retrieve_reference_candidates(
     # the reference drama would always come back as its own top match.
     # Resolved after the reference check so exclude lookups don't run
     # when we're about to return [] anyway.
-    exclude_ids = [ref_id] + find_exclude_ids(filters.exclude_titles, supabase)
-    return vector_search(query_vector, filters, exclude_ids, supabase, match_count)
+    exclude_ids = [ref_id] + find_exclude_ids(filters.exclude_titles, conn)
+    return vector_search(query_vector, filters, exclude_ids, conn, match_count)
 
 
 if __name__ == "__main__":
@@ -85,7 +85,7 @@ if __name__ == "__main__":
 
     filters = QueryFilters(
         search_mode="reference",
-        reference_title="Nirvana in Fire",
+        reference_title="Love between lines",
         min_score=8.0,
     )
     rows = retrieve_reference_candidates(
