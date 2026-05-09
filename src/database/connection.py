@@ -1,33 +1,36 @@
-import os
-from supabase import create_client, Client
-from src.env import load_secrets
+"""Connection helper for local Postgres."""
 
+from __future__ import annotations
+
+import os
+
+import psycopg
+from pgvector.psycopg import register_vector
+
+from src.env import load_secrets
 
 load_secrets()
 
 
-def get_db_connection() -> Client:
-    """Return an authenticated Supabase client.
+def get_db_connection() -> psycopg.Connection:
+    """Return a psycopg connection with pgvector type adapters registered.
 
-    Reads SUPABASE_URL and SUPABASE_SECRET_KEY from the environment
-    (loaded via dotenv). Uses the secret/service-role key to bypass
-    Row-Level Security.
+    Reads ``DATABASE_URL`` from the environment (loaded via dotenv).
+    ``register_vector`` teaches psycopg to ser/de the ``embedding``
+    column as a plain Python ``list[float]``, so callers don't have to
+    parse the textual ``vector`` representation by hand.
 
     Raises:
-        ValueError: If either environment variable is missing.
+        ValueError: If ``DATABASE_URL`` is missing.
     """
-    url: str | None = os.environ.get("SUPABASE_URL")
-
-    key: str | None = os.environ.get("SUPABASE_SECRET_KEY")
-
-    if not url or not key:
-        raise ValueError(
-            "SUPABASE_URL or SUPABASE_SECRET_KEY is missing from .env file!"
-        )
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise ValueError("DATABASE_URL is missing from .env file!")
 
     try:
-        return create_client(url, key)
+        conn = psycopg.connect(url, autocommit=True)
     except Exception as e:
-        raise ConnectionError(
-            f"Failed to connect to Supabase: {e}"
-        ) from e
+        raise ConnectionError(f"Failed to connect to Postgres: {e}") from e
+
+    register_vector(conn)
+    return conn
