@@ -18,8 +18,8 @@ Gated behind @pytest.mark.db so CI without Supabase creds skips:
 
 from __future__ import annotations
 
+import psycopg
 import pytest
-from supabase import Client
 
 from src.recommender.models import QueryFilters
 from src.recommender.search_reference import retrieve_reference_candidates
@@ -27,7 +27,7 @@ from src.recommender.search_sql import retrieve_sql_candidates
 
 
 @pytest.mark.db
-def test_sql_mode_excludes_genre(supabase: Client) -> None:
+def test_sql_mode_excludes_genre(db_conn: psycopg.Connection) -> None:
     """SQL-mode query with exclude_genres returns zero rows with that genre.
 
     Uses a broad filter (recent year floor, no reference, no description)
@@ -39,7 +39,7 @@ def test_sql_mode_excludes_genre(supabase: Client) -> None:
         min_year=2020,
         exclude_genres=["Romance"],
     )
-    rows = retrieve_sql_candidates(filters, supabase, match_count=10)
+    rows = retrieve_sql_candidates(filters, db_conn, match_count=10)
 
     assert rows, "Expected at least one row — the DB shouldn't be empty"
     for row in rows:
@@ -50,7 +50,7 @@ def test_sql_mode_excludes_genre(supabase: Client) -> None:
 
 
 @pytest.mark.db
-def test_reference_mode_excludes_genre(supabase: Client) -> None:
+def test_reference_mode_excludes_genre(db_conn: psycopg.Connection) -> None:
     """Reference-mode query with exclude_genres hits the match_documents RPC.
 
     If functions.sql hasn't been re-applied in the Supabase SQL editor,
@@ -62,7 +62,7 @@ def test_reference_mode_excludes_genre(supabase: Client) -> None:
         reference_title="Nirvana in Fire",
         exclude_genres=["Romance"],
     )
-    rows = retrieve_reference_candidates(filters, supabase, match_count=10)
+    rows = retrieve_reference_candidates(filters, db_conn, match_count=10)
 
     assert rows, "Reference drama 'Nirvana in Fire' should resolve to candidates"
     for row in rows:
