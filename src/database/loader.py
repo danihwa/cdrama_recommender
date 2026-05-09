@@ -1,32 +1,65 @@
-import pandas as pd
+"""Load embedded dramas from a parquet file into local Postgres."""
+
+from __future__ import annotations
+
 from pathlib import Path
+
+import pandas as pd
+
 from src.database.connection import get_db_connection
 
 
-def prepare_record(row: dict) -> dict:
-    """
-    Clean up a single record before sending to Supabase.
+UPSERT_SQL = """
+    INSERT INTO cdramas (
+        mdl_id, mdl_url, title, native_title, synopsis,
+        episodes, year, genres, tags, mdl_score, watchers, embedding
+    ) VALUES (
+        %(mdl_id)s, %(mdl_url)s, %(title)s, %(native_title)s, %(synopsis)s,
+        %(episodes)s, %(year)s, %(genres)s, %(tags)s, %(mdl_score)s, %(watchers)s, %(embedding)s
+    )
+    ON CONFLICT (mdl_id) DO UPDATE SET
+        mdl_url      = EXCLUDED.mdl_url,
+        title        = EXCLUDED.title,
+        native_title = EXCLUDED.native_title,
+        synopsis     = EXCLUDED.synopsis,
+        episodes     = EXCLUDED.episodes,
+        year         = EXCLUDED.year,
+        genres       = EXCLUDED.genres,
+        tags         = EXCLUDED.tags,
+        mdl_score    = EXCLUDED.mdl_score,
+        watchers     = EXCLUDED.watchers,
+        embedding    = EXCLUDED.embedding,
+        updated_at   = CURRENT_TIMESTAMP
+"""
 
-    Ensures list columns (embedding, genres, tags) are plain Python lists.
-    pgvector needs a standard list, not a numpy array or pandas Series.
-    """
+
+def prepare_record(row: dict) -> dict:
+    """Coerce numpy/pandas containers to the plain Python lists psycopg + pgvector expect."""
     return {
-        **row,
-        "embedding": list(row["embedding"]),  # ensure plain Python list
+        "mdl_id": int(row["mdl_id"]),
+        "mdl_url": row["mdl_url"],
+        "title": row["title"],
+        "native_title": row.get("native_title"),
+        "synopsis": row.get("synopsis"),
+        "episodes": int(row["episodes"]) if row.get("episodes") is not None else None,
+        "year": int(row["year"]) if row.get("year") is not None else None,
         "genres": list(row["genres"]),
         "tags": list(row["tags"]),
+        "mdl_score": float(row["mdl_score"]) if row.get("mdl_score") is not None else None,
+        "watchers": int(row["watchers"]) if row.get("watchers") is not None else None,
+        "embedding": list(row["embedding"]),
     }
 
 
-def insert_dramas(parquet_path: str | Path, batch_size: int = 100):
+def insert_dramas(parquet_path: str | Path, batch_size: int = 100) -> None:
     """
-    Reads dramas_with_vectors.parquet and upserts into Supabase in batches.
+    Read dramas_with_vectors.parquet and upsert into cdramas in batches.
 
-    Uses upsert (not insert) so re-runs are safe — if a drama already
-    exists by mdl_id, it gets updated instead of throwing an error.
-    Batching prevents timeouts when uploading large 1536-dim vectors.
+    Uses ON CONFLICT (mdl_id) so re-runs are safe — if a drama already
+    exists, the row gets updated instead of throwing. Batching keeps
+    memory bounded when uploading thousands of 3072-dim vectors.
     """
-    supabase = get_db_connection()
+    conn = get_db_connection()
 
     print(f"Loading data from {parquet_path}...")
     df = pd.read_parquet(parquet_path)
@@ -37,23 +70,21 @@ def insert_dramas(parquet_path: str | Path, batch_size: int = 100):
 
     success, failed = 0, 0
 
-    for i in range(0, total, batch_size):
-        batch = records[i : i + batch_size]
-        batch_num = i // batch_size + 1
-        total_batches = (total + batch_size - 1) // batch_size
+    with conn.cursor() as cur:
+        for i in range(0, total, batch_size):
+            batch = records[i : i + batch_size]
+            batch_num = i // batch_size + 1
+            total_batches = (total + batch_size - 1) // batch_size
 
-        try:
-            supabase.table("cdramas").upsert(
-                batch, on_conflict="mdl_id"  # safe to re-run: update if exists
-            ).execute()
+            try:
+                cur.executemany(UPSERT_SQL, batch)
+                success += len(batch)
+                print(f"  Batch {batch_num}/{total_batches} OK ({success}/{total})")
+            except Exception as e:
+                failed += len(batch)
+                print(f"  Batch {batch_num}/{total_batches} FAIL — {e}")
 
-            success += len(batch)
-            print(f"  Batch {batch_num}/{total_batches} ✓ ({success}/{total})")
-
-        except Exception as e:
-            failed += len(batch)
-            print(f"  Batch {batch_num}/{total_batches} ✗ — {e}")
-
+    conn.close()
     print(f"\nDone! {success} upserted, {failed} failed.")
 
 
