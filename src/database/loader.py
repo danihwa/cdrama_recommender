@@ -61,31 +61,33 @@ def insert_dramas(parquet_path: str | Path, batch_size: int = 100) -> None:
     """
     conn = get_db_connection()
 
-    print(f"Loading data from {parquet_path}...")
-    df = pd.read_parquet(parquet_path)
+    try:
+        print(f"Loading data from {parquet_path}...")
+        df = pd.read_parquet(parquet_path)
 
-    records = [prepare_record(row) for row in df.to_dict(orient="records")]
-    total = len(records)
-    print(f"Found {total} dramas. Starting upsert...")
+        records = [prepare_record(row) for row in df.to_dict(orient="records")]
+        total = len(records)
+        print(f"Found {total} dramas. Starting upsert...")
 
-    success, failed = 0, 0
+        success, failed = 0, 0
 
-    with conn.cursor() as cur:
-        for i in range(0, total, batch_size):
-            batch = records[i : i + batch_size]
-            batch_num = i // batch_size + 1
-            total_batches = (total + batch_size - 1) // batch_size
+        with conn.cursor() as cur:
+            for i in range(0, total, batch_size):
+                batch = records[i : i + batch_size]
+                batch_num = i // batch_size + 1
+                total_batches = (total + batch_size - 1) // batch_size
 
-            try:
-                cur.executemany(UPSERT_SQL, batch)
-                success += len(batch)
-                print(f"  Batch {batch_num}/{total_batches} OK ({success}/{total})")
-            except Exception as e:
-                failed += len(batch)
-                print(f"  Batch {batch_num}/{total_batches} FAIL — {e}")
+                try:
+                    cur.executemany(UPSERT_SQL, batch)
+                    success += len(batch)
+                    print(f"  Batch {batch_num}/{total_batches} OK ({success}/{total})")
+                except Exception as e:
+                    failed += len(batch)
+                    print(f"  Batch {batch_num}/{total_batches} FAIL — {e}")
 
-    conn.close()
-    print(f"\nDone! {success} upserted, {failed} failed.")
+        print(f"\nDone! {success} upserted, {failed} failed.")
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
