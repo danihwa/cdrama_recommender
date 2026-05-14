@@ -1,4 +1,4 @@
-"""Shared fixtures for integration tests.
+"""Shared fixtures for retrieval tests.
 
 conftest.py is a special pytest file — any fixture defined here is
 automatically available to every test in this directory (and below)
@@ -14,6 +14,6 @@ from src.env import load_secrets
 
 @pytest.fixture(scope="module")
 def db_conn() -> psycopg.Connection:
-    """psycopg connection for DB-hitting integration tests."""
+    """psycopg connection for DB-hitting retrieval tests."""
     load_secrets()
     return get_db_connection()

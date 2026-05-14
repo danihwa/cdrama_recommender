@@ -1,7 +1,7 @@
-"""End-to-end smoke tests for the exclude_genres SQL filter.
+"""Retrieval-layer tests for the exclude_genres filter.
 
-These tests hit the local Postgres DB to verify the filter actually works
-at the database layer.  The parser-level tests in test_parse_user_query.py
+These tests hit the local Postgres DB to verify the filter wiring actually
+works at the database layer.  The parser-level tests in test_parse_user_query.py
 only cover LLM output — they can't catch a broken RPC parameter or a
 missing query clause.
 
@@ -13,7 +13,7 @@ Why two tests?
     filter wiring are intact.
 
 Gated behind @pytest.mark.db so CI without DB access skips:
-    uv run pytest -m "not integration"
+    uv run pytest -m "not db"
 """
 
 from __future__ import annotations

@@ -7,11 +7,11 @@ actually producing good rankings on real data?"
 
 The pieces work together like this:
 
-    scripts/collect_candidates.py     ← Step 1: gather real data from DB
+    scripts/collect_candidates.py          ← Step 1: gather real data from DB
             ↓ writes
-    tests/evals/candidate_sets.json   ← raw candidates snapshot
+    tests/calibration/candidate_sets.json  ← raw candidates snapshot
             ↓ read by
-    tests/evals/test_weight_calibration.py     ← Step 2: THIS FILE
+    tests/calibration/test_weight_calibration.py  ← Step 2: THIS FILE
             ↑ imports
     src/recommender/pipeline.py::score_candidates  ← the function we test
 
@@ -27,7 +27,7 @@ Each preference is a human judgment call about what a good recommender
 should do. We collected 17 of these from real candidate sets, then check
 that the current weights satisfy all of them.
 
-Run:  uv run pytest tests/evals/test_weight_calibration.py -v
+Run:  uv run pytest tests/calibration/test_weight_calibration.py -v
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ import pytest
 
 from src.recommender.pipeline import score_candidates
 
-FIXTURES = Path("tests/evals/candidate_sets.json")
+FIXTURES = Path("tests/calibration/candidate_sets.json")
 
 
 def load_candidate_sets() -> dict[str, list[dict]]:

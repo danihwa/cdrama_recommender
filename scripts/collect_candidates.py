@@ -6,9 +6,9 @@ This is a one-shot data collection script — you run it once (or whenever
 the database changes significantly) to snapshot what the retrieval layer
 actually returns for a set of representative queries.
 
-The output (tests/evals/candidate_sets.json) is then used by
-the weight calibration eval (tests/evals/test_weight_calibration.py)
-to test whether the scorer's weights produce good orderings.
+The output (tests/calibration/candidate_sets.json) is then used by
+the weight calibration test (tests/calibration/test_weight_calibration.py)
+to check whether the scorer's weights produce good orderings.
 
 The flow is:
 
@@ -53,7 +53,7 @@ from src.recommender.models import QueryFilters
 from src.recommender.pipeline import retrieve_candidates
 
 MATCH_COUNT = 10
-OUTPUT_PATH = Path("tests/evals/candidate_sets.json")
+OUTPUT_PATH = Path("tests/calibration/candidate_sets.json")
 
 # Representative queries covering all three modes.
 #

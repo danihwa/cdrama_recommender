@@ -3,7 +3,7 @@
 These tests check the contents of the loaded `cdramas` table against the
 guarantees the cleaning notebook (notebooks/02_cleaning.ipynb) is supposed
 to enforce. They run against the local Postgres + pgvector container, so
-they're gated behind @pytest.mark.db like the integration suite.
+they're gated behind @pytest.mark.db like the retrieval suite.
 
 A module-scoped fixture is used so each test file fetches its slice of
 the table once, not once per test.

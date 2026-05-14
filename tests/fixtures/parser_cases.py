@@ -1,7 +1,7 @@
 """Shared golden-set cases for parse_user_query.
 
 Used by:
-  - tests/evals/test_parse_user_query.py        (pytest regression suite)
+  - tests/parser/test_parse_user_query.py       (pytest regression suite)
   - notebooks/04a_parser_lab.ipynb              (prompt dev / model comparison)
 
 Two lists:

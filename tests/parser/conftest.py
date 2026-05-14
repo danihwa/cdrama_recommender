@@ -1,4 +1,4 @@
-"""Shared fixtures for eval tests.
+"""Shared fixtures for parser tests.
 
 conftest.py is a special pytest file — any fixture defined here is
 automatically available to every test in this directory (and below)

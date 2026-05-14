@@ -1,9 +1,9 @@
-"""Eval suite for parse_user_query — real LLM calls against gpt-4o-mini.
+"""Parser eval suite for parse_user_query — real LLM calls against gpt-4o-mini.
 
 These are golden-set evals: they call the real OpenAI API to verify that
 the parser prompt + model combination produces correct structured output.
 This is different from unit tests (pure logic, no I/O) and from
-integration tests (which test DB or service wiring, not LLM behaviour).
+retrieval tests (which test DB-backed filter wiring, not LLM behaviour).
 
 Why real API calls instead of mocks?
     The whole point is to catch prompt regressions — if the LLM starts
@@ -31,8 +31,8 @@ and a title-not-in-genres guard that catches a known prompt regression.
 
 Cases live in tests/fixtures/parser_cases.py so the notebook can share them.
 
-Run all:   uv run pytest tests/evals/test_parse_user_query.py -v
-Run one:   uv run pytest tests/evals/test_parse_user_query.py -v -k "punctuation_title"
+Run all:   uv run pytest tests/parser/test_parse_user_query.py -v
+Run one:   uv run pytest tests/parser/test_parse_user_query.py -v -k "punctuation_title"
 Skip:      uv run pytest -m "not parser"
 """
 
