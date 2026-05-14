@@ -90,7 +90,7 @@ src/recommender/   # the pipeline (parse, route, retrieve, rerank)
 src/scraper/       # one-off MyDramaList scraper
 src/database/      # connection, schema.sql, functions.sql, parquet loader
 notebooks/         # exploration, cleaning, embeddings, parser experiments
-tests/             # unit, integration, smoke, eval, and data-quality tests
+tests/             # unit, integration, eval, and data-quality tests
 docker-compose.yml # local Postgres + pgvector container
 ```
 
