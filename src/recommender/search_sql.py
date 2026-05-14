@@ -35,7 +35,7 @@ def retrieve_sql_candidates(
 ) -> list[dict]:
     """Pure filter query — no embedding, no similarity.
 
-    Ordered by mdl_score DESC so the reranker (which will see similarity=0
+    Ordered by mdl_score DESC so the scorer (which will see similarity=0
     for every row) still gets a quality-first starting order.
     The ensemble score collapses to quality + popularity.
 

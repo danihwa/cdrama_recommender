@@ -86,7 +86,7 @@ DB-marked tests need `docker compose up -d` first.
 ## Project layout
 
 ```
-src/recommender/   # the pipeline (parse, route, retrieve, rerank)
+src/recommender/   # the pipeline (parse, route, retrieve, score)
 src/scraper/       # one-off MyDramaList scraper
 src/database/      # connection, schema.sql, functions.sql, parquet loader
 notebooks/         # exploration, cleaning, embeddings, parser experiments

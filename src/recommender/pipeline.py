@@ -10,7 +10,7 @@ that knows about the whole flow. The other files each handle one piece:
     search_sql.py        → pure filter retrieval
 
 The pipeline here is the classic RAG shape: Parse → Route → Retrieve →
-Rerank → Generate. Each function below corresponds to one stage, and
+Score → Format. Each function below corresponds to one stage, and
 `run_rag` is the entry point that chains them together.
 """
 
@@ -28,8 +28,8 @@ from src.recommender.search_semantic import retrieve_semantic_candidates
 from src.recommender.search_sql import retrieve_sql_candidates
 
 
-MATCH_COUNT = 14  # candidates to fetch before reranking
-TOP_N = 7         # candidates shown after reranking
+MATCH_COUNT = 14  # candidates to fetch before scoring
+TOP_N = 7         # candidates shown after scoring
 
 # History window shared by parser and generator (6 messages ≈ last 3 turns).
 HISTORY_MESSAGES = 6
@@ -96,25 +96,25 @@ RESULTS_HEADER = "=" * 60
 TITLE_WIDTH = 38  # left-pad title to this width so columns line up
 
 
-def format_results(reranked: list[dict]) -> str:
-    """Render the top reranked candidates as a numbered fixed-width table.
+def format_results(scored: list[dict]) -> str:
+    """Render the top scored candidates as a numbered fixed-width table.
 
     SQL-mode candidates have similarity 0 across the board (no vector
     search ran). Detecting that — every row's similarity is exactly 0 —
     lets us print an em dash instead of a wall of ``0.000``s, which
     otherwise looks like every drama is equally bad.
     """
-    if not reranked:
+    if not scored:
         return ""
 
-    sql_mode = all((d.get("similarity") or 0.0) == 0.0 for d in reranked)
+    sql_mode = all((d.get("similarity") or 0.0) == 0.0 for d in scored)
 
     lines = [
         RESULTS_HEADER,
-        f"Top {len(reranked)} candidates:",
+        f"Top {len(scored)} candidates:",
         RESULTS_HEADER,
     ]
-    for i, d in enumerate(reranked, start=1):
+    for i, d in enumerate(scored, start=1):
         title = d["title"]
         year = d["year"]
         score = d["mdl_score"]
@@ -183,7 +183,7 @@ def retrieve_candidates(
     raise ValueError(f"Unknown search_mode: {filters.search_mode}")
 
 
-def rerank_candidates(
+def score_candidates(
     candidates: list[dict],
     *,
     w_sim: float = 0.70,
@@ -191,7 +191,7 @@ def rerank_candidates(
     w_popularity: float = 0.10,
 ) -> list[dict]:
     """
-    Ensemble reranker combining three signals:
+    Ensemble scorer combining three signals:
 
       similarity  (w_sim)       — cosine similarity from match_documents, [0, 1].
       quality     (w_quality)   — MDL score / 10, range [0, 1].
@@ -257,7 +257,7 @@ def run_rag(
     openai: OpenAI,
     history: list[dict] | None = None,
 ) -> str:
-    """Full pipeline: Parse → Route → Retrieve → Rerank → Format.
+    """Full pipeline: Parse → Route → Retrieve → Score → Format.
 
     Returns a single human-readable string. Refusal and no-result cases
     return their canned messages; otherwise returns the parsed-filters
@@ -278,8 +278,8 @@ def run_rag(
     if not candidates:
         return NO_RESULTS_MESSAGE
 
-    reranked = rerank_candidates(candidates)
-    return format_results(reranked[:TOP_N])
+    scored = score_candidates(candidates)
+    return format_results(scored[:TOP_N])
 
 
 if __name__ == "__main__":

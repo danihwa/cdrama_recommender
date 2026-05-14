@@ -8,7 +8,7 @@ actually returns for a set of representative queries.
 
 The output (tests/evals/candidate_sets.json) is then used by
 the weight calibration eval (tests/evals/test_weight_calibration.py)
-to test whether the reranker's weights produce good orderings.
+to test whether the scorer's weights produce good orderings.
 
 The flow is:
 
@@ -26,7 +26,7 @@ about weights — it just captures the raw material.
 
 WHY WE NEED REAL DATA
 =====================
-The reranker's formula looks simple:
+The scorer's formula looks simple:
 
     score = 0.70 * similarity + 0.20 * quality + 0.10 * popularity
 
@@ -147,7 +147,7 @@ QUERIES: list[dict] = [
     },
     # --- SQL mode (3 queries) ---
     # Pure filters, no embedding. Every candidate gets similarity = 0.
-    # The reranker ranks by quality + popularity only.
+    # The scorer ranks by quality + popularity only.
     {
         "label": "sql_romance_2023_high",
         "mode": "sql",

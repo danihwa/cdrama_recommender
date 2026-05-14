@@ -2,7 +2,7 @@
 
 Defines QueryFilters — the structured representation of a user's natural
 language query that the parser LLM produces and every downstream stage
-(routing, retrieval, reranking) consumes.
+(routing, retrieval, scoring) consumes.
 """
 
 from __future__ import annotations

@@ -16,7 +16,7 @@ from psycopg.rows import dict_row
 from src.recommender.models import QueryFilters
 
 # Cosine-similarity floor for the match_documents function. Rows below this are
-# dropped server-side, so the reranker never sees obvious non-matches.
+# dropped server-side, so the scorer never sees obvious non-matches.
 MATCH_THRESHOLD = 0.3
 
 

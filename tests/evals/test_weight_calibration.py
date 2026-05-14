@@ -1,8 +1,8 @@
-"""Weight calibration for the reranker via golden-set pairwise preferences.
+"""Weight calibration for the scorer via golden-set pairwise preferences.
 
 HOW THIS FILE FITS IN
 =====================
-This test answers: "are the reranker's weights (0.70 / 0.20 / 0.10)
+This test answers: "are the scorer's weights (0.70 / 0.20 / 0.10)
 actually producing good rankings on real data?"
 
 The pieces work together like this:
@@ -13,7 +13,7 @@ The pieces work together like this:
             ↓ read by
     tests/evals/test_weight_calibration.py     ← Step 2: THIS FILE
             ↑ imports
-    src/recommender/pipeline.py::rerank_candidates  ← the function we test
+    src/recommender/pipeline.py::score_candidates  ← the function we test
 
 THE APPROACH: GOLDEN PAIRWISE PREFERENCES
 =========================================
@@ -39,7 +39,7 @@ from pathlib import Path
 
 import pytest
 
-from src.recommender.pipeline import rerank_candidates
+from src.recommender.pipeline import score_candidates
 
 FIXTURES = Path("tests/evals/candidate_sets.json")
 
@@ -77,7 +77,7 @@ class Preference:
     """One human judgment: drama `higher` should rank above drama `lower`.
 
     Each preference is tied to a specific candidate set (by label) because
-    the reranker normalises popularity *within the batch*. The same drama
+    the scorer normalises popularity *within the batch*. The same drama
     might get different popularity scores in different candidate sets.
     """
 
@@ -156,12 +156,12 @@ def check_preference(
 ) -> bool:
     """Return True if the weight triple satisfies this preference.
 
-    We deep-copy the candidates because rerank_candidates mutates them
+    We deep-copy the candidates because score_candidates mutates them
     (adds ensemble_score to each dict). Without the copy, running the
     same preference twice would see stale scores.
     """
     candidates = copy.deepcopy(CANDIDATE_SETS[pref.label])
-    ranked = rerank_candidates(
+    ranked = score_candidates(
         candidates, w_sim=w_sim, w_quality=w_quality, w_popularity=w_popularity
     )
     titles = [d["title"] for d in ranked]
