@@ -9,7 +9,7 @@ The pieces work together like this:
 
     scripts/collect_candidates.py     ← Step 1: gather real data from DB
             ↓ writes
-    tests/evals/fixtures/candidate_sets.json   ← raw candidates snapshot
+    tests/evals/candidate_sets.json   ← raw candidates snapshot
             ↓ read by
     tests/evals/test_weight_calibration.py     ← Step 2: THIS FILE
             ↑ imports
@@ -41,7 +41,7 @@ import pytest
 
 from src.recommender.pipeline import rerank_candidates
 
-FIXTURES = Path("tests/evals/fixtures/candidate_sets.json")
+FIXTURES = Path("tests/evals/candidate_sets.json")
 
 
 def load_candidate_sets() -> dict[str, list[dict]]:

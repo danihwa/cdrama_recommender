@@ -18,7 +18,7 @@ from __future__ import annotations
 import psycopg
 from psycopg.rows import dict_row
 
-from src.recommender._shared import find_exclude_ids, normalize_genres
+from src.recommender._shared import find_exclude_ids, normalize_genres, print_smoke_results
 from src.recommender.models import QueryFilters
 
 
@@ -91,6 +91,4 @@ if __name__ == "__main__":
         min_score=8.0,
     )
     rows = retrieve_sql_candidates(filters, get_db_connection(), match_count=5)
-    print(f"Got {len(rows)} rows:")
-    for r in rows:
-        print(f"  [{r['year']}] {r['title']} — {r['mdl_score']}")
+    print_smoke_results(rows)

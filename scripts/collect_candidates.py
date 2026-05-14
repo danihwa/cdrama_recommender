@@ -6,7 +6,7 @@ This is a one-shot data collection script — you run it once (or whenever
 the database changes significantly) to snapshot what the retrieval layer
 actually returns for a set of representative queries.
 
-The output (tests/evals/fixtures/candidate_sets.json) is then used by
+The output (tests/evals/candidate_sets.json) is then used by
 the weight calibration eval (tests/evals/test_weight_calibration.py)
 to test whether the reranker's weights produce good orderings.
 
@@ -49,14 +49,11 @@ import psycopg
 from openai import OpenAI
 
 from src.database.connection import get_db_connection
-from src.env import load_secrets
 from src.recommender.models import QueryFilters
-from src.recommender.search_reference import retrieve_reference_candidates
-from src.recommender.search_semantic import retrieve_semantic_candidates
-from src.recommender.search_sql import retrieve_sql_candidates
+from src.recommender.pipeline import retrieve_candidates
 
 MATCH_COUNT = 10
-OUTPUT_PATH = Path("tests/evals/fixtures/candidate_sets.json")
+OUTPUT_PATH = Path("tests/evals/candidate_sets.json")
 
 # Representative queries covering all three modes.
 #
@@ -192,16 +189,15 @@ def collect_all(conn: psycopg.Connection, openai: OpenAI) -> list[dict]:
         print(f"\n{'='*60}")
         print(f"Collecting: {label} (mode={mode})")
 
-        if mode == "reference":
-            candidates = retrieve_reference_candidates(filters, conn, MATCH_COUNT)
-        elif mode == "semantic":
-            candidates = retrieve_semantic_candidates(
-                filters, conn, openai, MATCH_COUNT
-            )
-        elif mode == "sql":
-            candidates = retrieve_sql_candidates(filters, conn, MATCH_COUNT)
-        else:
-            raise ValueError(f"Unknown mode: {mode}")
+        # Eval queries always set filters.description for semantic mode,
+        # so the fallback_query path in retrieve_candidates never triggers.
+        candidates = retrieve_candidates(
+            user_query="",
+            filters=filters,
+            conn=conn,
+            openai=openai,
+            match_count=MATCH_COUNT,
+        )
 
         print(f"  → {len(candidates)} candidates")
         for c in candidates[:3]:
@@ -226,7 +222,6 @@ def collect_all(conn: psycopg.Connection, openai: OpenAI) -> list[dict]:
 
 
 def main() -> None:
-    load_secrets()
     conn = get_db_connection()
     openai = OpenAI()
 

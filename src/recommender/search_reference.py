@@ -20,6 +20,7 @@ import psycopg
 from src.recommender._shared import (
     find_exclude_ids,
     lookup_drama_by_title,
+    print_smoke_results,
     vector_search,
 )
 from src.recommender.models import QueryFilters
@@ -93,9 +94,4 @@ if __name__ == "__main__":
         get_db_connection(),
         match_count=5,
     )
-    print(f"Got {len(rows)} rows:")
-    for r in rows:
-        print(
-            f"  [{r['year']}] {r['title']} "
-            f"— score {r['mdl_score']}, similarity {r['similarity']:.3f}"
-        )
+    print_smoke_results(rows)

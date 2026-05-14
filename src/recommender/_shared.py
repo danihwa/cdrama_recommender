@@ -122,3 +122,16 @@ def vector_search(
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(sql, params)
         return cur.fetchall()
+
+
+def print_smoke_results(rows: list[dict]) -> None:
+    """Compact dump for the ``__main__`` smoke blocks in each search module.
+
+    SQL-mode rows don't carry a ``similarity`` field; semantic/reference do.
+    The conditional suffix keeps a single helper usable in all three.
+    """
+    print(f"Got {len(rows)} rows:")
+    for r in rows:
+        similarity = r.get("similarity")
+        suffix = f", similarity {similarity:.3f}" if similarity is not None else ""
+        print(f"  [{r['year']}] {r['title']} — score {r['mdl_score']}{suffix}")

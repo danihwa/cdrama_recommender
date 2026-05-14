@@ -17,7 +17,7 @@ from __future__ import annotations
 import psycopg
 from openai import OpenAI
 
-from src.recommender._shared import find_exclude_ids, vector_search
+from src.recommender._shared import find_exclude_ids, print_smoke_results, vector_search
 from src.recommender.models import QueryFilters
 
 # CRITICAL: both constants MUST match what was used to embed the dramas at
@@ -80,9 +80,4 @@ if __name__ == "__main__":
         OpenAI(),
         match_count=5,
     )
-    print(f"Got {len(rows)} rows:")
-    for r in rows:
-        print(
-            f"  [{r['year']}] {r['title']} "
-            f"— score {r['mdl_score']}, similarity {r['similarity']:.3f}"
-        )
+    print_smoke_results(rows)

@@ -22,7 +22,6 @@ import psycopg
 from openai import OpenAI
 
 from src.database.connection import get_db_connection
-from src.env import load_secrets
 from src.recommender.models import QueryFilters
 from src.recommender.search_reference import retrieve_reference_candidates
 from src.recommender.search_semantic import retrieve_semantic_candidates
@@ -285,7 +284,6 @@ def run_rag(
 
 if __name__ == "__main__":
     # to run: uv run src/recommender/pipeline.py
-    load_secrets()
     openai_client = OpenAI()
     db_conn = get_db_connection()
 
